@@ -1,0 +1,24 @@
+.editorWrapper {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #0d1117;
+  color: #484f58;
+  font-size: 13px;
+}
+
+/* Highlight for the currently executing line */
+.currentLineHighlight {
+  background: rgba(31, 111, 235, 0.15) !important;
+}
+
+.currentLineBorder {
+  border-left: 3px solid #1f6feb;
+}

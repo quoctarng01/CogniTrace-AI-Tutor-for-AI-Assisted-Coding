@@ -1,0 +1,100 @@
+{
+  "app": {
+    "name": "CodeScope",
+    "tagline": "Hiểu code do AI tạo ra, từng bước một",
+    "description": "Dán code Python do AI tạo và xem nó thực thi từng bước với trạng thái biến thay đổi theo thời gian thực."
+  },
+  "landing": {
+    "hero": {
+      "title": "Thấy chính xác code AI tạo ra làm gì",
+      "subtitle": "Dán code. Xem nó chạy. Hiểu tại sao nó hoạt động.",
+      "cta": "Thử CodeScope miễn phí",
+      "demo_placeholder": "Dán code Python do AI tạo vào đây"
+    },
+    "features": {
+      "title": "Được xây dựng cho khoảng cách hiểu code AI",
+      "items": [
+        {
+          "title": "Thực thi từng bước",
+          "description": "Xem code của bạn thực thi từng dòng với trạng thái biến cập nhật theo thời gian thực."
+        },
+        {
+          "title": "Phát hiện nhánh",
+          "description": "Thấy chính xác nhánh if/else nào được thực thi và tại sao."
+        },
+        {
+          "title": "Giải thích theo ngữ cảnh",
+          "description": "Hỏi \"Tại sao dòng này ở đây?\" và nhận câu trả lời dựa trên trạng thái thực thi thực tế."
+        },
+        {
+          "title": "Ôn tập cách quãng",
+          "description": "Lưu trace vào hàng đợi ôn tập. CodeScope lên lịch để bạn nhớ những gì đã học."
+        }
+      ]
+    },
+    "pricing": {
+      "free": {
+        "title": "Miễn phí",
+        "price": "$0",
+        "features": ["50 trace mỗi tháng", "20 câu hỏi \"tại sao\" mỗi giờ", "Trực quan hóa code cơ bản"]
+      },
+      "pro": {
+        "title": "Pro",
+        "price": "$15",
+        "period": "mỗi tháng",
+        "features": ["Không giới hạn trace", "Không giới hạn câu hỏi \"tại sao\"", "Hàng đợi ôn tập & nhắc lại cách quãng", "Chia sẻ link trace", "Hỗ trợ ưu tiên"]
+      }
+    }
+  },
+  "tracer": {
+    "placeholder": "Dán code Python do AI tạo vào đây",
+    "trace": "Trace",
+    "traceTooltip": "Thực thi và trực quan hóa code từng bước",
+    "clear": "Xóa",
+    "variables": "Biến",
+    "step": "Bước {current} trong {total}",
+    "why": "Tại sao dòng này ở đây?",
+    "save": "Lưu vào hàng đợi ôn tập",
+    "share": "Chia sẻ",
+    "upgrade": "Nâng cấp lên Pro",
+    "sideEffectWarning": {
+      "title": "Code bị chặn vì lý do an toàn",
+      "message": "Code này chứa các thao tác tiềm ẩn nguy hiểm mà CodeScope không thể thực thi an toàn.",
+      "details": "CodeScope thực thi code trong môi trường sandbox. Các pattern sau bị chặn: thao tác file, gọi mạng, thực thi subprocess, và thực thi code động.",
+      "understood": "Tôi hiểu"
+    },
+    "errors": {
+      "timeout": "Thực thi hết thời gian sau 5 giây. Đây có thể là vòng lặp vô hạn.",
+      "syntaxError": "Lỗi cú pháp ở dòng {line}",
+      "runtimeError": "Lỗi runtime: {message}",
+      "serverError": "Lỗi server. Vui lòng thử lại."
+    }
+  },
+  "review": {
+    "title": "Hàng đợi ôn tập",
+    "empty": "Không có bài ôn nào. Hãy trace code để xây dựng hàng đợi.",
+    "due": "Đến hạn hôm nay",
+    "streak": "Chuỗi {count} ngày",
+    "nextReview": "Ôn tập tiếp theo: {date}",
+    "ratings": {
+      "again": "Lại",
+      "hard": "Khó",
+      "good": "Tốt",
+      "easy": "Dễ"
+    }
+  },
+  "auth": {
+    "signIn": "Đăng nhập",
+    "signUp": "Đăng ký",
+    "email": "Email",
+    "password": "Mật khẩu",
+    "signOut": "Đăng xuất",
+    "noAccount": "Chưa có tài khoản?",
+    "hasAccount": "Đã có tài khoản?"
+  },
+  "errors": {
+    "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+    "network": "Lỗi mạng. Kiểm tra kết nối của bạn.",
+    "notFound": "Trace này không tồn tại hoặc đã bị xóa."
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "app": {
+    "name": "CodeScope",
+    "tagline": "Understand your AI-generated code, step by step",
+    "description": "Paste AI-generated Python code and watch it execute step-by-step with animated variable state. See which branches fire, which variables change, and why."
+  },
+  "landing": {
+    "hero": {
+      "title": "See exactly what your AI-generated code does",
+      "subtitle": "Paste code. Watch it run. Understand why it works.",
+      "cta": "Try CodeScope free",
+      "demo_placeholder": "Paste your AI-generated Python code here"
+    },
+    "features": {
+      "title": "Built for the AI code comprehension gap",
+      "items": [
+        {
+          "title": "Step-by-step execution",
+          "description": "Watch your code execute line by line with variable state that updates in real time."
+        },
+        {
+          "title": "Branch detection",
+          "description": "See exactly which if/else branch fired and why, not just that a line executed."
+        },
+        {
+          "title": "Contextual explanations",
+          "description": "Ask \"Why is this here?\" and get an answer grounded in the actual execution state."
+        },
+        {
+          "title": "Spaced repetition review",
+          "description": "Save traces to your review queue. CodeScope schedules reviews so you retain what you learn."
+        }
+      ]
+    },
+    "pricing": {
+      "free": {
+        "title": "Free",
+        "price": "$0",
+        "features": ["50 traces per month", "20 \"why\" questions per hour", "Basic code visualization"]
+      },
+      "pro": {
+        "title": "Pro",
+        "price": "$15",
+        "period": "per month",
+        "features": ["Unlimited traces", "Unlimited \"why\" questions", "Review queue & spaced repetition", "Share trace links", "Priority support"]
+      }
+    }
+  },
+  "tracer": {
+    "placeholder": "Paste your AI-generated Python code here",
+    "trace": "Trace",
+    "traceTooltip": "Execute and visualize this code step by step",
+    "clear": "Clear",
+    "variables": "Variables",
+    "step": "Step {current} of {total}",
+    "why": "Why is this here?",
+    "save": "Save to Review Queue",
+    "share": "Share",
+    "upgrade": "Upgrade to Pro",
+    "sideEffectWarning": {
+      "title": "Code blocked for safety",
+      "message": "This code contains potentially dangerous operations that CodeScope cannot safely execute.",
+      "details": "CodeScope executes code in a sandboxed environment. The following patterns are blocked: file operations, network calls, subprocess execution, and dynamic code execution.",
+      "understood": "I understand"
+    },
+    "errors": {
+      "timeout": "Execution timed out after 5 seconds. This may be an infinite loop.",
+      "syntaxError": "Syntax error on line {line}",
+      "runtimeError": "Runtime error: {message}",
+      "serverError": "Server error. Please try again."
+    }
+  },
+  "review": {
+    "title": "Review Queue",
+    "empty": "No reviews due. Trace some code to build your queue.",
+    "due": "Due today",
+    "streak": "{count} day streak",
+    "nextReview": "Next review: {date}",
+    "ratings": {
+      "again": "Again",
+      "hard": "Hard",
+      "good": "Good",
+      "easy": "Easy"
+    }
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "email": "Email",
+    "password": "Password",
+    "signOut": "Sign Out",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "network": "Network error. Check your connection.",
+    "notFound": "This trace doesn't exist or has been removed."
+  }
+}
