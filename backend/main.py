@@ -1,21 +1,15 @@
-# backend/main.py
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from api import routes
+"""
+Legacy entry point — redirects to app.main.
 
-app = FastAPI(title="CodeScope API")
+This file is kept for backwards compatibility only.
+All requests are now handled by app.main:app (FastAPI with lifespan hooks,
+rate limiting, and comprehensive health checks).
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+To run the server:
+    uvicorn app.main:app --reload --port 8000
 
-app.include_router(routes.router, prefix="/api")
+Or via docker-compose / Dockerfile, which uses app.main:app by default.
+"""
+from app.main import app
 
-
-@app.get("/api/health")
-async def health():
-    return {"status": "ok"}
+__all__ = ["app"]
