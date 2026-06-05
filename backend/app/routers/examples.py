@@ -385,7 +385,7 @@ async def save_example_to_queue(
             },
         )
 
-    profile_id = await get_profile_id(authorization)
+    profile_id = await get_profile_id(authorization[7:] if authorization else None)
     if not profile_id:
         raise HTTPException(status_code=404, detail="Profile not found for user")
 

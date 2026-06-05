@@ -78,17 +78,34 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .saveBtn {
-  padding: 8px 16px; background: #21262d; border: 1px solid #30363d;
-  border-radius: 6px; color: #8b949e; font-size: 13px; font-weight: 500;
-  cursor: pointer; transition: all 0.15s;
+  padding: 8px 16px;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #8b949e;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
 }
-.saveBtn:hover:not(:disabled) { background: #30363d; color: #e6edf3; }
-.saveBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.saveBtn:hover:not(:disabled) {
+  background: #30363d;
+  color: #e6edf3;
+}
+.saveBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 .traceBtn {
   padding: 8px 20px;
@@ -249,4 +266,247 @@
 .errorDismiss:hover {
   background: rgba(248, 81, 73, 0.2);
   color: #f85149;
+}
+
+/* Share button */
+.shareBtn {
+  padding: 8px 16px;
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.shareBtn:hover:not(:disabled) {
+  background: #334155;
+  border-color: #475569;
+}
+
+.shareBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Modal overlay */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  padding: 32px;
+  width: 480px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.modalTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0 0 24px 0;
+}
+
+.modalField {
+  margin-bottom: 20px;
+}
+
+.modalLabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin-bottom: 8px;
+}
+
+.modalSelect,
+.modalInput {
+  width: 100%;
+  padding: 10px 12px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #f8fafc;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.modalSelect:focus,
+.modalInput:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+.modalHint {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 6px;
+}
+
+.modalError {
+  padding: 10px 12px;
+  background: #450a0a;
+  border: 1px solid #991b1b;
+  border-radius: 8px;
+  color: #fca5a5;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.modalActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.modalCancelBtn {
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.modalCancelBtn:hover {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+.modalConfirmBtn {
+  padding: 10px 20px;
+  background: #6366f1;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.modalConfirmBtn:hover:not(:disabled) {
+  background: #4f46e5;
+}
+
+.modalConfirmBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Share link box */
+.shareLinkBox {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.shareLinkInput {
+  flex: 1;
+  padding: 10px 12px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #22c55e;
+  font-size: 13px;
+  font-family: 'Fira Code', 'Courier New', monospace;
+}
+
+.copyBtn {
+  padding: 10px 16px;
+  background: #22c55e;
+  border: none;
+  border-radius: 8px;
+  color: #052e16;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.copyBtn:hover {
+  background: #16a34a;
+}
+
+.shareNote {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 4px 0;
+}
+
+/* What-If button */
+.whatIfBtn {
+  padding: 8px 16px;
+  background: #1c1917;
+  color: #fbbf24;
+  border: 1px solid #44403c;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.whatIfBtn:hover:not(:disabled) {
+  background: #292524;
+  border-color: #57534e;
+}
+
+.whatIfBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Responsive styles */
+@media (max-width: 1024px) {
+  .main {
+    flex-direction: column;
+  }
+  .editorPanel {
+    height: 45vh;
+    border-right: none;
+    border-bottom: 1px solid #21262d;
+  }
+  .rightPanel {
+    height: 55vh;
+  }
+}
+
+@media (max-width: 640px) {
+  .editorPanel {
+    height: 35vh;
+  }
+  .rightPanel {
+    height: 65vh;
+  }
+  .lineActions {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+  .modal {
+    width: 95vw;
+    padding: 20px;
+  }
 }

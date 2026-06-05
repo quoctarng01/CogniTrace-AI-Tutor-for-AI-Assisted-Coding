@@ -1,0 +1,8 @@
+fix: tracer test coverage, remove debug scripts, consolidate entry point
+
+- Add 27 new unit and characterization tests covering critical tracer paths
+  (syntax errors, sandbox errors, return capture, max-steps, generators, etc.)
+- Remove 22 debug scripts from backend/ root (left over from development)
+- Delete test_supabase.py (contained hardcoded credentials — rotate keys)
+- Redirect legacy main.py to app/main.py; app/main.py is canonical
+- Pin pytest-cov in pyproject.toml; update COVERAGE_SUMMARY.md

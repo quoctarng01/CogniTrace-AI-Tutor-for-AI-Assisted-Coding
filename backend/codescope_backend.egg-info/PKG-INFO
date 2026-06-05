@@ -10,9 +10,11 @@ Requires-Dist: httpx>=0.28.0
 Requires-Dist: structlog>=24.0.0
 Requires-Dist: sse-starlette>=2.0.0
 Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: slowapi>=0.1.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.3.0; extra == "dev"
 Requires-Dist: pytest-asyncio>=0.25.0; extra == "dev"
+Requires-Dist: pytest-cov>=8.3.0; extra == "dev"
 Requires-Dist: ruff>=0.8.0; extra == "dev"
 Requires-Dist: mypy>=1.14.0; extra == "dev"
 Requires-Dist: httpx>=0.28.0; extra == "dev"

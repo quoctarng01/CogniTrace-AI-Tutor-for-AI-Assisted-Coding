@@ -9,7 +9,7 @@ export interface VariableInfo {
 }
 
 export interface BranchInfo {
-  type: "if" | "for" | "while" | "ternary" | "and_or" | "bool_op" | string;
+  type: 'if' | 'for' | 'while' | 'ternary' | 'and_or' | 'bool_op' | string;
   taken?: boolean;
   line?: number;
   iteration?: number;
@@ -40,21 +40,21 @@ export interface TraceResult {
 
 // Type badge colors
 export const TYPE_COLORS: Record<string, string> = {
-  int: "#3b82f6",    // blue
-  float: "#06b6d4",  // cyan
-  str: "#22c55e",    // green
-  bool: "#f59e0b",   // amber
-  list: "#a855f7",    // purple
-  tuple: "#8b5cf6",  // violet
-  dict: "#f97316",    // orange
-  set: "#ec4899",     // pink
-  NoneType: "#6b7280", // gray
-  function: "#64748b", // slate
-  type: "#475569",    // dark slate
-  module: "#94a3b8",  // light slate
-  object: "#71717a",  // zinc
+  int: '#3b82f6', // blue
+  float: '#06b6d4', // cyan
+  str: '#22c55e', // green
+  bool: '#f59e0b', // amber
+  list: '#a855f7', // purple
+  tuple: '#8b5cf6', // violet
+  dict: '#f97316', // orange
+  set: '#ec4899', // pink
+  NoneType: '#6b7280', // gray
+  function: '#64748b', // slate
+  type: '#475569', // dark slate
+  module: '#94a3b8', // light slate
+  object: '#71717a', // zinc
 };
 
 export function getTypeColor(typeName: string): string {
-  return TYPE_COLORS[typeName] ?? "#71717a";
+  return TYPE_COLORS[typeName] ?? '#71717a';
 }

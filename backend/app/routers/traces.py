@@ -1,11 +1,12 @@
 """Trace execution API endpoints."""
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Depends, Request
 from pydantic import BaseModel, Field
 from typing import Optional
 import httpx
 import secrets
 import json
 import logging
+import bcrypt
 
 from datetime import date, datetime
 from tracer.validator import validate_code
@@ -15,6 +16,15 @@ from app.routers.auth import get_current_user
 from app.routers.review import _calculate_streak
 
 logger = logging.getLogger("codescope.traces")
+
+# ── Rate Limiter ────────────────────────────────────────────────
+_limiter = None
+try:
+    from slowapi import Limiter
+    from slowapi.util import get_remote_address
+    _limiter = Limiter(key_func=get_remote_address)
+except ImportError:
+    pass  # slowapi not installed — rate limiting disabled
 
 
 # ── Helper Functions ────────────────────────────────────────────────
@@ -76,6 +86,14 @@ router = APIRouter()
 class TraceRequest(BaseModel):
     """Request body for /api/traces/run."""
     code: str = Field(..., max_length=5000, description="Python source code to trace")
+    initial_namespace: dict[str, str] | None = Field(
+        default=None,
+        description=(
+            "Optional initial variable values as name→string pairs. "
+            "Values are evaluated as Python literals. "
+            "Example: {\"items\": \"[1, 2, 3]\", \"threshold\": \"10\"}"
+        ),
+    )
 
 
 class VariableInfoResponse(BaseModel):
@@ -103,8 +121,24 @@ class TraceResponse(BaseModel):
     duration_ms: float
 
 
+def _rate_limit(rate: str):
+    """Decorator factory for rate limiting."""
+    def decorator(func):
+        if _limiter is None:
+            return func
+        return _limiter.limit(rate)(func)
+    return decorator
+
+
+def rate_limit_dependency(rate: str):
+    """Dependency for rate limiting."""
+    if _limiter is None:
+        return None
+    return _limiter.limit(rate)
+
+
 @router.post("/traces/run", response_model=TraceResponse)
-async def run_trace(req: TraceRequest, authorization: str = Header(None)):
+async def run_trace(req: TraceRequest, authorization: str = Header(None), request: Request = None):
     """
     Execute Python code and return a step-by-step trace.
     Side-effect patterns (import os, eval, open(), etc.) are blocked.
@@ -150,10 +184,20 @@ async def run_trace(req: TraceRequest, authorization: str = Header(None)):
             }
         )
 
-    # Step 2: Run the tracer in a subprocess
-    result = run_trace_subprocess(req.code, max_steps=500)
+    # Step 2: Parse initial_namespace values from strings to Python values
+    initial_ns = None
+    if req.initial_namespace:
+        initial_ns = {}
+        for name, val_str in req.initial_namespace.items():
+            try:
+                initial_ns[name] = eval(val_str, {"__builtins__": {"True": True, "False": False, "None": None}})
+            except Exception:
+                pass  # Skip invalid values
 
-    # Step 3: Handle errors
+    # Step 3: Run the tracer in a subprocess
+    result = run_trace_subprocess(req.code, max_steps=500, initial_namespace=initial_ns)
+
+    # Step 4: Handle errors
     if "error" in result:
         error_code = result["error"]
         if error_code == "TIMEOUT":
@@ -254,9 +298,33 @@ async def get_dashboard(authorization: str = Header(None)):
 class SaveTraceRequest(BaseModel):
     code: str
     language: str = "python"
-    steps: list[dict] = []
+    steps: list[dict] = Field(
+        default_factory=list,
+        description="Full trace steps array for replay. Stored in DB so saved traces can be replayed without re-execution.",
+    )
     concept_tags: list[str] = []
     is_public: bool = False
+
+
+class ShareTraceRequest(BaseModel):
+    """Request body for POST /traces/{id}/share."""
+    expiration_days: int | None = Field(
+        default=None,
+        ge=0,
+        le=365,
+        description="Days until link expires. null/0 = never.",
+    )
+    password: str | None = Field(
+        default=None,
+        max_length=128,
+        description="Optional password to protect the shared link.",
+    )
+
+
+class ForkTraceResponse(BaseModel):
+    trace_id: str
+    share_token: str
+    share_url: str
 
 
 @router.post("/traces", response_model=dict)
@@ -293,6 +361,7 @@ async def save_trace(
         "concept_tags": req.concept_tags if req.concept_tags else [],
         "is_public": req.is_public if req.is_public is not None else False,
         "share_token": share_token,
+        "steps": req.steps if req.steps else [],  # ← SAVE FULL STEPS for replay
     }
 
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -371,39 +440,217 @@ async def list_traces(
 
 
 @router.get("/traces/shared/{share_token}")
-async def get_shared_trace(share_token: str):
-    """Get a trace by its share token. Public endpoint."""
+async def get_shared_trace(
+    share_token: str,
+    authorization: str | None = Header(None),
+):
+    """
+    Fetch a trace by share_token.
+
+    If authenticated (owner), returns the trace if:
+      - is_public=true  OR
+      - user_id matches the authenticated user's profile
+
+    If anonymous, returns only is_public=true traces.
+    """
+    from app.routers.auth import get_profile_id
+
+    owner_id = None
+    if authorization:
+        token = authorization.replace("Bearer ", "")
+        owner_id = await get_profile_id(token)
+
     settings = Settings()
+
+    if owner_id:
+        params = {
+            "share_token": f"eq.{share_token}",
+            "or": f"(is_public.eq.true,user_id.eq.{owner_id})",
+            "select": "*",
+            "limit": "1",
+        }
+        headers = {
+            "apikey": settings.supabase_service_key,
+            "Authorization": f"Bearer {settings.supabase_service_key}",
+        }
+    else:
+        params = {
+            "share_token": f"eq.{share_token}",
+            "is_public": "eq.true",
+            "select": "*",
+            "limit": "1",
+        }
+        headers = {
+            "apikey": settings.supabase_service_key,
+            "Authorization": f"Bearer {settings.supabase_service_key}",
+        }
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{settings.supabase_url}/rest/v1/traces",
-            params={
-                "share_token": f"eq.{share_token}",
-                "is_public": "eq.true",
-                "select": "*",
-            },
+            params=params,
+            headers=headers,
+        )
+
+    if resp.status_code != 200 or not resp.json():
+        raise HTTPException(status_code=404, detail="Trace not found")
+
+    trace = resp.json()[0]
+
+    # Check expiration
+    expires_at = trace.get("expires_at")
+    if expires_at:
+        from datetime import datetime, timezone
+        try:
+            exp_date = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) > exp_date:
+                raise HTTPException(
+                    status_code=410,
+                    detail={
+                        "error": "EXPIRED",
+                        "message": "This trace has expired. Sign in to CodeScope to view it.",
+                        "login_url": "/auth/login",
+                    },
+                )
+        except ValueError:
+            pass  # Invalid date format — treat as not expired
+
+    # Return trace data (exclude password_hash from client response)
+    result = {k: v for k, v in trace.items() if k != "password_hash"}
+    return result
+
+
+@router.post("/traces/shared/{share_token}/fork")
+async def fork_shared_trace(
+    share_token: str,
+    authorization: str = Header(None),
+):
+    """
+    Fork a shared trace — copies it into the authenticated user's account.
+    The fork is a NEW trace owned by the caller, independent of the original.
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    settings = Settings()
+    user = await get_current_user(authorization)
+    user_id = user.get("id", "")
+
+    # Get the original trace
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        orig_resp = await client.get(
+            f"{settings.supabase_url}/rest/v1/traces",
+            params={"share_token": f"eq.{share_token}", "select": "*"},
             headers={"apikey": settings.supabase_service_key},
         )
 
-    traces = resp.json() if resp.status_code == 200 else []
-    if not traces:
-        raise HTTPException(status_code=404, detail="Trace not found")
-    return traces[0]
+    orig_traces = orig_resp.json() if orig_resp.status_code == 200 else []
+    if not orig_traces:
+        raise HTTPException(status_code=404, detail="Shared trace not found")
+
+    orig = orig_traces[0]
+
+    # Create fork — new user_id, new share_token, same code + steps
+    new_share_token = secrets.token_hex(16)
+    fork_data = {
+        "user_id": user_id,
+        "code": orig.get("code", ""),
+        "language": orig.get("language", "python"),
+        "concept_tags": orig.get("concept_tags", []),
+        "is_public": False,
+        "share_token": new_share_token,
+        "steps": orig.get("steps"),
+    }
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        fork_resp = await client.post(
+            f"{settings.supabase_url}/rest/v1/traces",
+            headers={
+                "Authorization": f"Bearer {settings.supabase_service_key}",
+                "apikey": settings.supabase_service_key,
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            json=fork_data,
+        )
+
+    if fork_resp.status_code not in (200, 201):
+        raise HTTPException(status_code=502, detail="Failed to fork trace")
+
+    fork = fork_resp.json()
+    if isinstance(fork, list) and len(fork) > 0:
+        fork = fork[0]
+
+    logger.info("trace_forked", extra={
+        "original_token": share_token,
+        "new_trace_id": fork.get("id", ""),
+        "user_id": user_id,
+    })
+
+    return ForkTraceResponse(
+        trace_id=fork.get("id", ""),
+        share_token=new_share_token,
+        share_url=f"/trace/{new_share_token}",
+    )
 
 
 @router.post("/traces/{trace_id}/share")
 async def share_trace(
     trace_id: str,
+    req: ShareTraceRequest | None = None,
     authorization: str = Header(None),
 ):
-    """Generate or update a share link for a trace."""
+    """
+    Generate or update a share link for a trace.
+    Sets is_public=true and generates a new share_token.
+
+    Body (optional):
+      - expiration_days: int | null — days until expiry (null/0 = never)
+      - password: str | null — optional protection password
+    """
     if not authorization:
         raise HTTPException(status_code=401, detail="Authentication required")
 
     settings = Settings()
     share_token = secrets.token_hex(16)
 
+    # Build update payload
+    update_payload: dict = {
+        "share_token": share_token,
+        "is_public": True,
+    }
+
+    # Handle expiration
+    if req and req.expiration_days and req.expiration_days > 0:
+        from datetime import datetime, timedelta, timezone
+        expires = datetime.now(timezone.utc) + timedelta(days=req.expiration_days)
+        update_payload["expires_at"] = expires.isoformat()
+    else:
+        update_payload["expires_at"] = None
+
+    # Handle password protection
+    if req and req.password:
+        hashed = bcrypt.hashpw(req.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        update_payload["password_hash"] = hashed
+    else:
+        update_payload["password_hash"] = None
+
     async with httpx.AsyncClient(timeout=10.0) as client:
+        # Verify the trace belongs to this user first
+        user = await get_current_user(authorization)
+        user_id = user.get("id", "")
+
+        check_resp = await client.get(
+            f"{settings.supabase_url}/rest/v1/traces",
+            params={"id": f"eq.{trace_id}", "user_id": f"eq.{user_id}", "select": "id"},
+            headers={
+                "Authorization": f"Bearer {authorization[7:]}",
+                "apikey": settings.supabase_service_key,
+            },
+        )
+        if check_resp.status_code != 200 or not check_resp.json():
+            raise HTTPException(status_code=404, detail="Trace not found")
+
         resp = await client.patch(
             f"{settings.supabase_url}/rest/v1/traces",
             params={"id": f"eq.{trace_id}"},
@@ -413,10 +660,15 @@ async def share_trace(
                 "Content-Type": "application/json",
                 "Prefer": "return=minimal",
             },
-            json={"share_token": share_token, "is_public": True},
+            json=update_payload,
         )
 
     if resp.status_code == 404:
         raise HTTPException(status_code=404, detail="Trace not found")
 
-    return {"share_token": share_token, "share_url": f"/trace/{share_token}"}
+    return {
+        "share_token": share_token,
+        "share_url": f"/trace/{share_token}",
+        "expires_at": update_payload.get("expires_at"),
+        "has_password": bool(req and req.password),
+    }

@@ -1,35 +1,33 @@
 /**
  * useTrace — manages trace playback with rAF-based animation loop.
- * 
+ *
  * CRITICAL FIX (vs original setInterval approach):
  * - Uses requestAnimationFrame with elapsed time tracking
  * - Pauses automatically when tab is hidden (visibilitychange)
  * - Synchronized with rendering — no accumulated drift
  * - Step-accurate timing regardless of tab focus state
- * 
+ *
  * Original problem with setInterval:
  *   - setInterval fires even when tab is backgrounded
  *   - Steps accumulate and then jump when tab becomes visible
  *   - Not synchronized with rendering, causing visual stutter
- * 
- * Speed → interval mapping:
- *   1× → 750ms per step
- *   2× → 375ms per step
- *   5× → 150ms per step
- *   0.5× → 1500ms per step
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import type { TraceStep } from "@/types/trace";
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { TraceStep } from '@/types/trace';
 
 export type PlaybackSpeed = 0.5 | 1 | 2 | 5;
-export type PlaybackState = "idle" | "playing" | "paused" | "ended";
+export type PlaybackState = 'idle' | 'playing' | 'paused' | 'ended';
 
+/**
+ * Speed → interval mapping in milliseconds per step.
+ * These values determine how long each trace step displays during auto-play.
+ */
 const SPEED_MS: Record<PlaybackSpeed, number> = {
-  0.5: 1500,
-  1: 750,
-  2: 375,
-  5: 150,
+  0.5: 1500, // 0.5× speed: 1500ms per step
+  1: 750,    // 1× speed (normal): 750ms per step
+  2: 375,    // 2× speed: 375ms per step
+  5: 150,    // 5× speed: 150ms per step
 };
 
 export interface UseTraceOptions {
@@ -44,7 +42,7 @@ export interface UseTraceReturn {
   playbackState: PlaybackState;
   speed: PlaybackSpeed;
   currentStepData: TraceStep | null;
-  
+
   // Controls
   play: () => void;
   pause: () => void;
@@ -63,7 +61,7 @@ export function useTrace({
 }: UseTraceOptions): UseTraceReturn {
   const [currentStep, setCurrentStep] = useState(initialStep);
   const [playbackState, setPlaybackState] = useState<PlaybackState>(
-    autoPlay && steps.length > 0 ? "playing" : "idle"
+    autoPlay && steps.length > 0 ? 'playing' : 'idle'
   );
   const [speed, setSpeedState] = useState<PlaybackSpeed>(1);
 
@@ -106,7 +104,7 @@ export function useTrace({
       const currentStepRef = pausedStepRef.current;
 
       if (accumulatedTimeRef.current >= intervalMs) {
-        accumulatedTimeRef.current -= intervalMs;  // Carry over excess time
+        accumulatedTimeRef.current -= intervalMs; // Carry over excess time
         lastStepTimeRef.current = timestamp;
 
         if (currentStepRef < totalSteps - 1) {
@@ -115,8 +113,8 @@ export function useTrace({
         } else {
           // End of trace
           isPlayingRef.current = false;
-          setPlaybackState("ended");
-          return;  // Stop the loop
+          setPlaybackState('ended');
+          return; // Stop the loop
         }
       }
 
@@ -137,7 +135,7 @@ export function useTrace({
     isPlayingRef.current = true;
     lastStepTimeRef.current = 0;
     accumulatedTimeRef.current = 0;
-    setPlaybackState("playing");
+    setPlaybackState('playing');
 
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
@@ -153,7 +151,7 @@ export function useTrace({
       rafRef.current = null;
     }
     pausedStepRef.current = currentStep;
-    setPlaybackState("paused");
+    setPlaybackState('paused');
   }, [currentStep]);
 
   // Toggle play/pause
@@ -167,25 +165,25 @@ export function useTrace({
 
   // Step forward one step
   const stepForward = useCallback(() => {
-    pause();  // Always pause before manual step
+    pause(); // Always pause before manual step
     if (pausedStepRef.current < totalSteps - 1) {
       pausedStepRef.current += 1;
       setCurrentStep(pausedStepRef.current);
-      setPlaybackState("paused");
+      setPlaybackState('paused');
     } else {
-      setPlaybackState("ended");
+      setPlaybackState('ended');
     }
   }, [pause, totalSteps]);
 
   // Step backward one step
   const stepBackward = useCallback(() => {
-    pause();  // Always pause before manual step
+    pause(); // Always pause before manual step
     if (pausedStepRef.current > 0) {
       pausedStepRef.current -= 1;
       setCurrentStep(pausedStepRef.current);
-      setPlaybackState("paused");
+      setPlaybackState('paused');
     } else {
-      setPlaybackState("paused");
+      setPlaybackState('paused');
     }
   }, [pause]);
 
@@ -196,7 +194,7 @@ export function useTrace({
       pause();
       pausedStepRef.current = clampedStep;
       setCurrentStep(clampedStep);
-      setPlaybackState(clampedStep === totalSteps - 1 ? "ended" : "paused");
+      setPlaybackState(clampedStep === totalSteps - 1 ? 'ended' : 'paused');
     },
     [pause, totalSteps]
   );
@@ -214,7 +212,7 @@ export function useTrace({
     pause();
     pausedStepRef.current = 0;
     setCurrentStep(0);
-    setPlaybackState("idle");
+    setPlaybackState('idle');
     accumulatedTimeRef.current = 0;
   }, [pause]);
 
@@ -231,50 +229,61 @@ export function useTrace({
       // When tab becomes visible again, user can manually resume
     };
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [pause]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────
 
+  /** Extract the target element from a keyboard event. */
+  const getEventTarget = (e: KeyboardEvent): HTMLElement | null => {
+    return e.target as HTMLElement | null;
+  };
+
+  /**
+   * Check if an element is a text input where keyboard shortcuts should be ignored.
+   */
+  const isTextInput = (el: HTMLElement | null): boolean => {
+    if (!el) return false;
+    return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable;
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle if not in a text input
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+      if (isTextInput(getEventTarget(e))) {
         return;
       }
 
       switch (e.key) {
-        case " ":
+        case ' ':
           e.preventDefault();
           togglePlayPause();
           break;
-        case "ArrowRight":
+        case 'ArrowRight':
           e.preventDefault();
           if (isPlayingRef.current) pause();
           stepForward();
           break;
-        case "ArrowLeft":
+        case 'ArrowLeft':
           e.preventDefault();
           if (isPlayingRef.current) pause();
           stepBackward();
           break;
-        case "Home":
+        case 'Home':
           e.preventDefault();
           reset();
           break;
-        case "End":
+        case 'End':
           e.preventDefault();
           jumpToStep(totalSteps - 1);
           break;
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePlayPause, stepForward, stepBackward, reset, jumpToStep, pause, totalSteps]);
 
   // ── Cleanup on unmount ──────────────────────────────────────────

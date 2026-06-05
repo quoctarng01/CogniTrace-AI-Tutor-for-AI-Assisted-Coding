@@ -36,13 +36,23 @@
       "free": {
         "title": "Free",
         "price": "$0",
-        "features": ["50 traces per month", "20 \"why\" questions per hour", "Basic code visualization"]
+        "features": [
+          "50 traces per month",
+          "20 \"why\" questions per hour",
+          "Basic code visualization"
+        ]
       },
       "pro": {
         "title": "Pro",
         "price": "$15",
         "period": "per month",
-        "features": ["Unlimited traces", "Unlimited \"why\" questions", "Review queue & spaced repetition", "Share trace links", "Priority support"]
+        "features": [
+          "Unlimited traces",
+          "Unlimited \"why\" questions",
+          "Review queue & spaced repetition",
+          "Share trace links",
+          "Priority support"
+        ]
       }
     }
   },

@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useCallback } from "react";
-import type { TraceStep } from "@/types/trace";
-import { getTypeColor } from "@/types/trace";
-import styles from "./VariablePanel.module.css";
+import { useEffect, useRef, useCallback } from 'react';
+import type { TraceStep } from '@/types/trace';
+import { getTypeColor } from '@/types/trace';
+import styles from './VariablePanel.module.css';
 
 interface VariablePanelProps {
   variables: Record<string, { type: string; value: string; changed: boolean }>;
@@ -12,7 +12,9 @@ interface VariablePanelProps {
 }
 
 export function VariablePanel({ variables, branches, isLoading }: VariablePanelProps) {
-  const prevVariablesRef = useRef<Record<string, { type: string; value: string; changed: boolean }>>({});
+  const prevVariablesRef = useRef<
+    Record<string, { type: string; value: string; changed: boolean }>
+  >({});
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Track which variables just changed for animation
@@ -35,7 +37,14 @@ export function VariablePanel({ variables, branches, isLoading }: VariablePanelP
 
       {Object.keys(variables).length === 0 && !isLoading ? (
         <div className={styles.empty}>
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg
+            width="40"
+            height="40"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
             <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18" />
           </svg>
           <p>Run the trace to see variable states</p>
@@ -45,13 +54,16 @@ export function VariablePanel({ variables, branches, isLoading }: VariablePanelP
           {sortedVars.map(([name, info]) => (
             <div
               key={name}
-              className={`${styles.varItem} ${info.changed || changedVars.some(([n]) => n === name) ? styles.changed : ""}`}
+              className={`${styles.varItem} ${info.changed || changedVars.some(([n]) => n === name) ? styles.changed : ''}`}
             >
               <div className={styles.varHeader}>
                 <span className={styles.varName}>{name}</span>
                 <span
                   className={styles.typeBadge}
-                  style={{ backgroundColor: `${getTypeColor(info.type)}20`, color: getTypeColor(info.type) }}
+                  style={{
+                    backgroundColor: `${getTypeColor(info.type)}20`,
+                    color: getTypeColor(info.type),
+                  }}
                 >
                   {info.type}
                 </span>
@@ -68,9 +80,7 @@ export function VariablePanel({ variables, branches, isLoading }: VariablePanelP
       {branches && Object.keys(branches).length > 0 && (
         <div className={styles.branchSection}>
           <h4 className={styles.branchTitle}>Branch Decision</h4>
-          <div className={styles.branchInfo}>
-            {renderBranch(branches)}
-          </div>
+          <div className={styles.branchInfo}>{renderBranch(branches)}</div>
         </div>
       )}
     </div>
@@ -81,7 +91,7 @@ function renderBranch(branch: Record<string, unknown>): React.ReactNode {
   const type = branch.type as string;
 
   switch (type) {
-    case "if":
+    case 'if':
       return (
         <div className={styles.branchCard}>
           <div className={styles.branchType}>
@@ -92,11 +102,13 @@ function renderBranch(branch: Record<string, unknown>): React.ReactNode {
               <span className={styles.branchTakenFalse}>else branch taken</span>
             ) : null}
           </div>
-          {typeof branch.line === 'number' && <span className={styles.branchLine}>line {branch.line}</span>}
+          {typeof branch.line === 'number' && (
+            <span className={styles.branchLine}>line {branch.line}</span>
+          )}
         </div>
       );
 
-    case "for":
+    case 'for':
       return (
         <div className={styles.branchCard}>
           <div className={styles.branchType}>
@@ -106,11 +118,13 @@ function renderBranch(branch: Record<string, unknown>): React.ReactNode {
           {typeof branch.iteration === 'number' && (
             <span className={styles.branchIteration}>iteration {branch.iteration}</span>
           )}
-          {typeof branch.line === 'number' && <span className={styles.branchLine}>line {branch.line}</span>}
+          {typeof branch.line === 'number' && (
+            <span className={styles.branchLine}>line {branch.line}</span>
+          )}
         </div>
       );
 
-    case "while":
+    case 'while':
       return (
         <div className={styles.branchCard}>
           <div className={styles.branchType}>
@@ -120,7 +134,7 @@ function renderBranch(branch: Record<string, unknown>): React.ReactNode {
         </div>
       );
 
-    case "bool_op":
+    case 'bool_op':
       return (
         <div className={styles.branchCard}>
           <div className={styles.branchType}>
@@ -130,7 +144,7 @@ function renderBranch(branch: Record<string, unknown>): React.ReactNode {
         </div>
       );
 
-    case "ternary_or_if":
+    case 'ternary_or_if':
       return (
         <div className={styles.branchCard}>
           <div className={styles.branchType}>

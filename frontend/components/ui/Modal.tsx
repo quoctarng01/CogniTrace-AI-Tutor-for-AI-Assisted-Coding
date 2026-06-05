@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect } from 'react';
 
 interface ModalProps {
   isOpen: boolean;
@@ -13,12 +13,13 @@ interface ModalProps {
 export function Modal({ isOpen, onClose, title, children, maxWidth = 480 }: ModalProps) {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === 'Escape') onClose();
     };
     if (isOpen) {
-      document.addEventListener("keydown", handleKey);
-      return () => document.removeEventListener("keydown", handleKey);
+      document.addEventListener('keydown', handleKey);
+      return () => document.removeEventListener('keydown', handleKey);
     }
+    return undefined;
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -26,56 +27,56 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 480 }: Moda
   return (
     <div
       style={{
-        position: "fixed",
+        position: 'fixed',
         inset: 0,
         zIndex: 200,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px",
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
       }}
-      onClick={(e) => {
+      onClick={e => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       {/* Backdrop */}
       <div
         style={{
-          position: "absolute",
+          position: 'absolute',
           inset: 0,
-          background: "rgba(0,0,0,0.6)",
-          backdropFilter: "blur(4px)",
+          background: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(4px)',
         }}
       />
 
       {/* Panel */}
       <div
         style={{
-          position: "relative",
-          width: "100%",
+          position: 'relative',
+          width: '100%',
           maxWidth: `${maxWidth}px`,
-          background: "#161b22",
-          border: "1px solid #30363d",
-          borderRadius: "12px",
-          boxShadow: "0 16px 64px rgba(0,0,0,0.5)",
-          overflow: "hidden",
+          background: '#161b22',
+          border: '1px solid #30363d',
+          borderRadius: '12px',
+          boxShadow: '0 16px 64px rgba(0,0,0,0.5)',
+          overflow: 'hidden',
         }}
       >
         {title && (
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "16px 20px",
-              borderBottom: "1px solid #21262d",
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px 20px',
+              borderBottom: '1px solid #21262d',
             }}
           >
             <h2
               style={{
-                fontSize: "15px",
+                fontSize: '15px',
                 fontWeight: 700,
-                color: "#e6edf3",
+                color: '#e6edf3',
               }}
             >
               {title}
@@ -84,13 +85,13 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 480 }: Moda
               onClick={onClose}
               aria-label="Close modal"
               style={{
-                background: "transparent",
-                border: "none",
-                color: "#484f58",
-                cursor: "pointer",
-                fontSize: "16px",
-                padding: "4px 8px",
-                borderRadius: "4px",
+                background: 'transparent',
+                border: 'none',
+                color: '#484f58',
+                cursor: 'pointer',
+                fontSize: '16px',
+                padding: '4px 8px',
+                borderRadius: '4px',
                 lineHeight: 1,
               }}
             >
@@ -98,7 +99,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 480 }: Moda
             </button>
           </div>
         )}
-        <div style={{ padding: "20px" }}>{children}</div>
+        <div style={{ padding: '20px' }}>{children}</div>
       </div>
     </div>
   );

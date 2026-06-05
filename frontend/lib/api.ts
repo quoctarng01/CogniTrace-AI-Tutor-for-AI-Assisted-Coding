@@ -1,10 +1,23 @@
 /**
  * API client — typed fetch wrappers for all CodeScope endpoints.
  */
-import type { TraceStep } from "@/types/trace";
-import type { AnalyzeResponse } from "@/types/annotation";
-import type { DashboardData, DueReviewsData, SaveTraceResponse, SubmitReviewResponse, SavedTrace, ReviewCardDetail, SharedTraceData } from "@/types/user";
-import { getAuthToken } from "@/lib/supabase";
+import type { TraceStep } from '@/types/trace';
+import type { AnalyzeResponse } from '@/types/annotation';
+import type {
+  DashboardData,
+  DueReviewsData,
+  SaveTraceResponse,
+  SubmitReviewResponse,
+  SavedTrace,
+  ReviewCardDetail,
+  SharedTraceData,
+} from '@/types/user';
+import { getAuthToken } from '@/lib/supabase';
+
+// ── Constants ─────────────────────────────────────────────────────
+
+/** Maximum code length allowed per trace (in characters). */
+const MAX_CODE_LENGTH = 5000;
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -59,15 +72,35 @@ export interface DueReviewsResponse {
 
 export interface Profile {
   id: string;
-  experience_level: "student" | "junior" | "mid";
-  ai_tools_usage: "none" | "light" | "moderate" | "heavy";
+  experience_level: 'student' | 'junior' | 'mid';
+  ai_tools_usage: 'none' | 'light' | 'moderate' | 'heavy';
   ollama_endpoint: string;
-  plan: "free" | "pro";
+  plan: 'free' | 'pro';
+}
+
+// ── Error Handling ────────────────────────────────────────────────
+
+/**
+ * Check response status and throw appropriate errors.
+ * Consolidates repeated error handling patterns across the API.
+ */
+function throwOnStatus(res: Response, path: string): void {
+  if (res.status === 401) throw new Error('AUTH_REQUIRED');
+  if (res.status === 404) throw new Error(`${path}_NOT_FOUND`);
+  if (!res.ok) throw new Error(`Failed to load ${path}: ${res.status}`);
 }
 
 // ── API Client ───────────────────────────────────────────────────
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000") + "/api";
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000') + '/api';
+
+/**
+ * Get the base API URL (used by standalone functions outside the class).
+ * Centralizes the env var + fallback pattern.
+ */
+function getApiBase(): string {
+  return API_BASE;
+}
 
 class CodeScopeAPI {
   private baseUrl: string;
@@ -83,12 +116,12 @@ class CodeScopeAPI {
 
   private async fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     };
 
     if (this.token) {
-      headers["Authorization"] = `Bearer ${this.token}`;
+      headers['Authorization'] = `Bearer ${this.token}`;
     }
 
     const res = await fetch(`${this.baseUrl}${path}`, {
@@ -100,14 +133,12 @@ class CodeScopeAPI {
       let errorBody: Record<string, unknown> = {};
       try {
         errorBody = await res.json();
-      } catch {
+      } catch (_err) {
         errorBody = { message: res.statusText };
       }
 
       const error = new Error(
-        (errorBody.message as string) ||
-        (errorBody.detail as string) ||
-        `HTTP ${res.status}`
+        (errorBody.message as string) || (errorBody.detail as string) || `HTTP ${res.status}`
       ) as Error & { status: number; body: Record<string, unknown> };
       error.status = res.status;
       error.body = errorBody;
@@ -124,39 +155,39 @@ class CodeScopeAPI {
   // ── Traces ────────────────────────────────────────────────────
 
   async runTrace(code: string): Promise<TraceRunResponse> {
-    return this.fetch<TraceRunResponse>("/traces/run", {
-      method: "POST",
+    return this.fetch<TraceRunResponse>('/traces/run', {
+      method: 'POST',
       body: JSON.stringify({ code }),
     });
   }
 
   async analyzeCode(code: string): Promise<AnalyzeResponse> {
-    return this.fetch<AnalyzeResponse>("/analyze", {
-      method: "POST",
+    return this.fetch<AnalyzeResponse>('/analyze', {
+      method: 'POST',
       body: JSON.stringify({ code }),
     });
   }
 
   async saveTrace(req: TraceSaveRequest): Promise<TraceSaveResponse> {
-    return this.fetch<TraceSaveResponse>("/traces", {
-      method: "POST",
+    return this.fetch<TraceSaveResponse>('/traces', {
+      method: 'POST',
       body: JSON.stringify(req),
     });
   }
 
   async getTraces(): Promise<{ traces: unknown[] }> {
-    return this.fetch<{ traces: unknown[] }>("/traces");
+    return this.fetch<{ traces: unknown[] }>('/traces');
   }
 
   // ── Reviews ──────────────────────────────────────────────────
 
   async getDueReviews(): Promise<DueReviewsResponse> {
-    return this.fetch<DueReviewsResponse>("/review/due");
+    return this.fetch<DueReviewsResponse>('/review/due');
   }
 
   async submitReview(
     cardId: string,
-    rating: "again" | "hard" | "good" | "easy"
+    rating: 'again' | 'hard' | 'good' | 'easy'
   ): Promise<{
     card_id: string;
     new_interval_days: number;
@@ -165,7 +196,7 @@ class CodeScopeAPI {
     next_review_date: string;
   }> {
     return this.fetch(`/review/${cardId}`, {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify({ rating }),
     });
   }
@@ -173,14 +204,14 @@ class CodeScopeAPI {
   // ── Profiles ──────────────────────────────────────────────────
 
   async getProfile(): Promise<Profile> {
-    return this.fetch<Profile>("/profiles/me");
+    return this.fetch<Profile>('/profiles/me');
   }
 
   async updateProfile(
-    updates: Partial<Pick<Profile, "experience_level" | "ai_tools_usage" | "ollama_endpoint">>
+    updates: Partial<Pick<Profile, 'experience_level' | 'ai_tools_usage' | 'ollama_endpoint'>>
   ): Promise<Profile> {
-    return this.fetch<Profile>("/profiles/me", {
-      method: "PATCH",
+    return this.fetch<Profile>('/profiles/me', {
+      method: 'PATCH',
       body: JSON.stringify(updates),
     });
   }
@@ -191,17 +222,23 @@ export const api = new CodeScopeAPI();
 
 // ── Standalone auth-fetch helper ─────────────────────────────────
 
-async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+const logger = {
+  debug: (...args: unknown[]) => {
+    if (process.env.NODE_ENV === 'development') console.log(...args);
+  },
+};
+
+export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = await getAuthToken();
-  console.log("[DEBUG] authFetch token:", token ? `${token.substring(0, 30)}...` : "NULL");
+  logger.debug('[authFetch] token:', token ? `${token.substring(0, 30)}...` : 'NULL');
   const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string> || {}),
+    ...((options.headers as Record<string, string>) || {}),
   };
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-    console.log("[DEBUG] Sending Authorization header");
+    headers['Authorization'] = `Bearer ${token}`;
+    logger.debug('[authFetch] Sending Authorization header');
   } else {
-    console.log("[DEBUG] NO Authorization header - token is null");
+    logger.debug('[authFetch] NO Authorization header - token is null');
   }
   return fetch(url, { ...options, headers });
 }
@@ -209,9 +246,8 @@ async function authFetch(url: string, options: RequestInit = {}): Promise<Respon
 // ── Dashboard / Traces ─────────────────────────────────────────
 
 export async function fetchDashboard(): Promise<DashboardData> {
-  const res = await authFetch(`${API_BASE}/traces`);
-  if (res.status === 401) throw new Error("AUTH_REQUIRED");
-  if (!res.ok) throw new Error(`Failed to load dashboard: ${res.status}`);
+  const res = await authFetch(`${getApiBase()}/traces`);
+  throwOnStatus(res, 'dashboard');
   return res.json();
 }
 
@@ -221,22 +257,22 @@ export async function saveTrace(params: {
   steps: TraceStep[];
   concept_tags?: string[];
 }): Promise<SaveTraceResponse> {
-  if (params.code.length > 5000) {
-    throw new Error("Code exceeds 5000 character limit");
+  if (params.code.length > MAX_CODE_LENGTH) {
+    throw new Error(`Code exceeds ${MAX_CODE_LENGTH} character limit`);
   }
-  const res = await authFetch(`${API_BASE}/traces`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+  const res = await authFetch(`${getApiBase()}/traces`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       code: params.code,
-      language: params.language ?? "python",
+      language: params.language ?? 'python',
       steps: params.steps,
       concept_tags: params.concept_tags ?? [],
     }),
   });
-  if (res.status === 401) throw new Error("AUTH_REQUIRED");
-  if (res.status === 402) throw new Error("UPGRADE_REQUIRED");
-  if (!res.ok) throw new Error(`Failed to save trace: ${res.status}`);
+  if (res.status === 401) throw new Error('AUTH_REQUIRED');
+  if (res.status === 402) throw new Error('UPGRADE_REQUIRED');
+  throwOnStatus(res, 'trace');
   return res.json();
 }
 
@@ -247,60 +283,81 @@ export async function saveTrace(params: {
  * Called by /review/[card_id] — one API call, full data returned.
  */
 export async function fetchReviewCard(cardId: string): Promise<ReviewCardDetail> {
-  const res = await authFetch(`${API_BASE}/review/${cardId}`);
-  if (res.status === 401) throw new Error("AUTH_REQUIRED");
-  if (res.status === 404) throw new Error("CARD_NOT_FOUND");
-  if (!res.ok) throw new Error(`Failed to load review card: ${res.status}`);
+  const res = await authFetch(`${getApiBase()}/review/${cardId}`);
+  throwOnStatus(res, 'review card');
   return res.json();
 }
 
 export async function fetchDueReviews(): Promise<DueReviewsData> {
-  const res = await authFetch(`${API_BASE}/review/due`);
-  if (res.status === 401) throw new Error("AUTH_REQUIRED");
-  if (!res.ok) throw new Error(`Failed to load reviews: ${res.status}`);
+  const res = await authFetch(`${getApiBase()}/review/due`);
+  throwOnStatus(res, 'reviews');
   return res.json();
 }
 
 export async function submitReviewRating(
   cardId: string,
-  rating: "again" | "hard" | "good" | "easy"
+  rating: 'again' | 'hard' | 'good' | 'easy'
 ): Promise<SubmitReviewResponse> {
-  const res = await authFetch(`${API_BASE}/review/${cardId}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+  const res = await authFetch(`${getApiBase()}/review/${cardId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rating }),
   });
-  if (res.status === 401) throw new Error("AUTH_REQUIRED");
-  if (!res.ok) throw new Error(`Failed to submit review: ${res.status}`);
+  throwOnStatus(res, 'review');
   return res.json();
 }
 
 // ── Shared trace ────────────────────────────────────────────────
 
 export async function fetchSharedTrace(shareToken: string): Promise<SharedTraceData> {
-  const res = await fetch(`${API_BASE}/traces/shared/${shareToken}`);
-  if (res.status === 404) throw new Error("TRACE_NOT_FOUND");
-  if (!res.ok) throw new Error(`Failed to load trace: ${res.status}`);
+  const res = await fetch(`${getApiBase()}/traces/shared/${shareToken}`);
+  throwOnStatus(res, 'trace');
   return res.json();
 }
 
-export async function shareTrace(traceId: string): Promise<{ share_token: string; share_url: string }> {
-  const res = await authFetch(`${API_BASE}/traces/${traceId}/share`, { method: "POST" });
-  if (res.status === 401) throw new Error("AUTH_REQUIRED");
-  if (!res.ok) throw new Error(`Failed to share trace: ${res.status}`);
+export async function shareTrace(
+  traceId: string,
+  options?: {
+    expiration_days?: number;
+    password?: string;
+  }
+): Promise<{ share_token: string; share_url: string; expires_at: string | null; has_password: boolean }> {
+  const body: Record<string, unknown> = {};
+  if (options?.expiration_days !== undefined) {
+    body.expiration_days = options.expiration_days;
+  }
+  if (options?.password) {
+    body.password = options.password;
+  }
+  const res = await authFetch(`${getApiBase()}/traces/${traceId}/share`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) throw new Error('AUTH_REQUIRED');
+  if (!res.ok) throw new Error(`Failed to generate share link: ${res.status}`);
   return res.json();
 }
 
 // ── Re-export runTrace for convenience ──────────────────────────
 
-export async function runTrace(code: string): Promise<{ trace_id: string; steps: TraceStep[]; total_steps: number; duration_ms: number }> {
-  const res = await fetch(`${API_BASE}/traces/run`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code }),
+export async function runTrace(
+  code: string,
+  options?: {
+    initialNamespace?: Record<string, string>;
+  }
+): Promise<{ trace_id: string; steps: TraceStep[]; total_steps: number; duration_ms: number; error?: string; error_message?: string }> {
+  const body: Record<string, unknown> = { code };
+  if (options?.initialNamespace) {
+    body.initial_namespace = options.initialNamespace;
+  }
+  const res = await fetch(`${getApiBase()}/traces/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Unknown error" }));
+    const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
     throw new Error(err.detail?.error ?? err.detail ?? `HTTP ${res.status}`);
   }
   return res.json();
@@ -349,14 +406,14 @@ export interface SaveToQueueResponse {
 export async function fetchExamples(
   category?: string,
   limit = 20,
-  offset = 0,
+  offset = 0
 ): Promise<ExampleListResponse> {
   const params = new URLSearchParams();
-  if (category) params.set("category", category);
-  params.set("limit", String(limit));
-  params.set("offset", String(offset));
+  if (category) params.set('category', category);
+  params.set('limit', String(limit));
+  params.set('offset', String(offset));
 
-  const url = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/examples?${params}`;
+  const url = `${getApiBase()}/examples?${params}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch examples: ${res.status}`);
   return res.json();
@@ -367,10 +424,9 @@ export async function fetchExamples(
  * Auth: NOT required.
  */
 export async function fetchExample(id: string): Promise<Example> {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-  const url = `${base}/api/examples/${encodeURIComponent(id)}`;
+  const url = `${getApiBase()}/examples/${encodeURIComponent(id)}`;
   const res = await fetch(url);
-  if (res.status === 404) throw new Error("EXAMPLE_NOT_FOUND");
+  if (res.status === 404) throw new Error('EXAMPLE_NOT_FOUND');
   if (!res.ok) throw new Error(`Failed to fetch example: ${res.status}`);
   return res.json();
 }
@@ -382,23 +438,22 @@ export async function fetchExample(id: string): Promise<Example> {
  */
 export async function saveExampleToReview(exampleId: string): Promise<SaveToQueueResponse> {
   const token = await _getAuthToken();
-  if (!token) throw new Error("AUTH_REQUIRED");
+  if (!token) throw new Error('AUTH_REQUIRED');
 
-  const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-  const res = await fetch(`${base}/api/examples/${encodeURIComponent(exampleId)}/save`, {
-    method: "POST",
+  const res = await fetch(`${getApiBase()}/examples/${encodeURIComponent(exampleId)}/save`, {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
   });
 
-  if (res.status === 401) throw new Error("AUTH_REQUIRED");
+  if (res.status === 401) throw new Error('AUTH_REQUIRED');
   if (res.status === 403) {
     const body = await res.json().catch(() => ({}));
-    throw Object.assign(new Error("UPGRADE_REQUIRED"), { detail: body.detail });
+    throw Object.assign(new Error('UPGRADE_REQUIRED'), { detail: body.detail });
   }
-  if (res.status === 404) throw new Error("EXAMPLE_NOT_FOUND");
+  if (res.status === 404) throw new Error('EXAMPLE_NOT_FOUND');
   if (!res.ok) throw new Error(`Failed to save example: ${res.status}`);
   return res.json();
 }
@@ -406,7 +461,7 @@ export async function saveExampleToReview(exampleId: string): Promise<SaveToQueu
 /** Helper: get the Supabase auth token. */
 async function _getAuthToken(): Promise<string | null> {
   try {
-    const { getSupabase } = await import("@/lib/supabase");
+    const { getSupabase } = await import('@/lib/supabase');
     const { data } = await getSupabase().auth.getSession();
     return data.session?.access_token ?? null;
   } catch {

@@ -1,0 +1,148 @@
+# CodeScope — Local Development Environment
+#
+# Run the full stack locally with:
+#   docker compose up --build
+#
+# Then:
+#   Frontend:  http://localhost:3000
+#   API:       http://localhost:8000/docs (Swagger UI)
+#   Redis:     http://localhost:6379
+#   Supabase:  http://localhost:54321 (Studio)
+
+version: "3.9"
+
+services:
+  # ── Frontend (Next.js) ────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:54321}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - codescope
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ── Backend (FastAPI) ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+      # Supabase (local or cloud)
+      SUPABASE_URL: ${SUPABASE_URL:-http://supabase-db:5432}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      # Redis (for distributed rate limiting)
+      REDIS_URL: redis://redis:6379
+      # AI providers
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_CLOUD_URL: https://ollama.com/api
+      OLLAMA_MODEL: llama3.2
+      OLLAMA_TIMEOUT: "8.0"
+      # Rate limiting
+      RATE_LIMIT_PER_HOUR: "20"
+      RATE_LIMIT_WINDOW_SECONDS: "3600"
+      # Concurrency
+      MAX_CONCURRENT_TRACES: "25"
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - codescope
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ── Redis (for distributed rate limiting) ───────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - codescope
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ── Supabase (PostgreSQL + Studio) ──────────────────────────────
+  supabase-db:
+    image: supabase/postgres:15.1.0.147
+    ports:
+      - "54321:5432"
+    environment:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: postgres
+    volumes:
+      - supabase_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - codescope
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # ── Supabase Studio (DB Management UI) ───────────────────────────
+  supabase-studio:
+    image: supabase/studio:20241028-91dd0f8
+    ports:
+      - "3001:3000"
+    environment:
+      SUPABASE_URL: http://localhost:54321
+      STUDIO_PG_META_URL: http://supabase-db:5432
+      STUDIO_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    depends_on:
+      - supabase-db
+    networks:
+      - codescope
+
+networks:
+  codescope:
+    driver: bridge
+
+volumes:
+  redis_data:
+  supabase_data:

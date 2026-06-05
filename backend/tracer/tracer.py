@@ -105,10 +105,39 @@ def _capture_variables(
                 changed=(prev_repr is not None) and (curr_repr != prev_repr),
             )
 
+    # Add initial namespace variables that haven't appeared in any frame yet
+    # (they exist at step 0 before the code runs)
+    for name, val in namespace.items():
+        if name in _INTERNAL_NAMES or _is_internal_variable(name):
+            continue
+        if name not in variables:
+            prev_repr = prev_variables.get(name, None)
+            curr_repr = repr(val)[:200]
+            variables[name] = VariableInfo(
+                type=type(val).__name__,
+                value=curr_repr,
+                changed=(prev_repr is not None) and (curr_repr != prev_repr),
+            )
+
     return variables
 
 
-def run_trace(source: str, max_steps: int = 500) -> dict:
+def run_trace(
+    source: str,
+    max_steps: int = 500,
+    initial_namespace: dict | None = None,
+) -> dict:
+    """
+    Execute Python source code with step-by-step tracing.
+
+    Args:
+        source: Python source code string.
+        max_steps: Maximum number of trace steps (default 500).
+        initial_namespace: Optional dict of variable names → values to pre-populate
+                          the execution namespace before code runs.
+                          Values are evaluated as Python literals.
+                          Example: {"items": [1, 2, 3], "threshold": 10}
+    """
     jump_map = _build_jump_map(source)
 
     try:
@@ -125,8 +154,18 @@ def run_trace(source: str, max_steps: int = 500) -> dict:
 
     steps: list[TraceStep] = []
     prev_variables: dict[str, str] = {}
-    start_time = time.perf_counter()
+
+    # Pre-populate namespace from initial_namespace if provided
     namespace: dict = {}
+    if initial_namespace:
+        for name, raw_val in initial_namespace.items():
+            try:
+                val = eval(repr(raw_val), {"__builtins__": {"True": True, "False": False, "None": None}})
+                namespace[name] = val
+            except Exception:
+                pass  # Silently skip invalid initial values
+
+    start_time = time.perf_counter()
     max_steps_reached = False
 
     def tracer_callback(frame, event, arg):

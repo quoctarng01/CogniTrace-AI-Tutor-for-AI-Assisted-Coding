@@ -1,55 +1,239 @@
 /* frontend/app/trace/[share_token]/share.module.css */
 .page {
-  display: flex; flex-direction: column; height: 100vh;
-  background: #0d1117; color: #e6edf3;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #0d1117;
+  color: #e6edf3;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 .notFound {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  min-height: 100vh; gap: 12px; text-align: center; padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 12px;
+  text-align: center;
+  padding: 20px;
 }
-.notFound h1 { margin: 0; font-size: 24px; color: #e6edf3; }
-.notFound p { margin: 0; color: #8b949e; font-size: 14px; }
-.homeLink { margin-top: 8px; color: #58a6ff; text-decoration: none; font-size: 14px; }
+.notFound h1 {
+  margin: 0;
+  font-size: 24px;
+  color: #e6edf3;
+}
+.notFound p {
+  margin: 0;
+  color: #8b949e;
+  font-size: 14px;
+}
+.homeLink {
+  margin-top: 8px;
+  color: #58a6ff;
+  text-decoration: none;
+  font-size: 14px;
+}
 
 .topBar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px; height: 56px; border-bottom: 1px solid #21262d;
-  background: #161b22; flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 56px;
+  border-bottom: 1px solid #21262d;
+  background: #161b22;
+  flex-shrink: 0;
 }
-.brand { display: flex; align-items: center; gap: 8px; text-decoration: none; }
-.logo { font-size: 20px; color: #58a6ff; }
-.brandName { font-size: 16px; font-weight: 700; color: #e6edf3; }
-.actions { display: flex; gap: 8px; }
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+.logo {
+  font-size: 20px;
+  color: #58a6ff;
+}
+.brandName {
+  font-size: 16px;
+  font-weight: 700;
+  color: #e6edf3;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+}
 
 .saveBtn {
-  padding: 8px 16px; background: #21262d; border: 1px solid #30363d; border-radius: 6px;
-  color: #8b949e; font-size: 13px; font-weight: 500; font-family: inherit;
-  cursor: pointer; transition: all 0.15s;
+  padding: 8px 16px;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #8b949e;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
 }
-.saveBtn:hover:not(:disabled) { background: #30363d; color: #e6edf3; }
-.saveBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.saveBtn:hover:not(:disabled) {
+  background: #30363d;
+  color: #e6edf3;
+}
+.saveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 .traceBtn {
-  padding: 8px 20px; border: none; border-radius: 6px;
-  background: linear-gradient(135deg, #1f6feb, #388bfd); color: white;
-  font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer; transition: all 0.15s;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #1f6feb, #388bfd);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
 }
-.traceBtn:hover:not(:disabled) { background: linear-gradient(135deg, #388bfd, #58a6ff); transform: translateY(-1px); }
-.traceBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.traceBtn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #388bfd, #58a6ff);
+  transform: translateY(-1px);
+}
+.traceBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 .errorBanner {
-  display: flex; align-items: center; gap: 10px; padding: 10px 20px;
-  background: rgba(248,81,73,0.1); border-bottom: 1px solid rgba(248,81,73,0.2);
-  color: #f85149; font-size: 13px; flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(248, 81, 73, 0.1);
+  border-bottom: 1px solid rgba(248, 81, 73, 0.2);
+  color: #f85149;
+  font-size: 13px;
+  flex-shrink: 0;
 }
-.dismissBtn { margin-left: auto; background: transparent; border: none; color: inherit; cursor: pointer; font-size: 12px; padding: 2px 6px; }
+.dismissBtn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+}
 
-.main { display: flex; flex: 1; overflow: hidden; }
-.editorPanel { flex: 6; overflow: hidden; border-right: 1px solid #21262d; }
-.editorLoading {
-  display: flex; align-items: center; justify-content: center; height: 100%;
-  background: #0d1117; color: #484f58; font-size: 13px;
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
 }
-.rightPanel { flex: 4; overflow: hidden; }
-.footer { border-top: 1px solid #21262d; flex-shrink: 0; }
+.editorPanel {
+  flex: 6;
+  overflow: hidden;
+  border-right: 1px solid #21262d;
+}
+.editorLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #0d1117;
+  color: #484f58;
+  font-size: 13px;
+}
+.rightPanel {
+  flex: 4;
+  overflow: hidden;
+}
+.footer {
+  border-top: 1px solid #21262d;
+  flex-shrink: 0;
+}
+
+/* Password gate */
+.passwordGate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  padding: 32px;
+}
+
+.passwordGate h1 {
+  font-size: 24px;
+  color: #f8fafc;
+  margin-bottom: 12px;
+}
+
+.passwordGate p {
+  color: #94a3b8;
+  margin-bottom: 20px;
+}
+
+.passwordInput {
+  padding: 12px 16px;
+  width: 300px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #f8fafc;
+  font-size: 16px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.passwordInput:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+.passwordError {
+  color: #fca5a5;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.passwordSubmitBtn {
+  padding: 12px 32px;
+  background: #6366f1;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.passwordSubmitBtn:hover {
+  background: #4f46e5;
+}
+
+/* Fork button */
+.forkBtn {
+  padding: 8px 16px;
+  background: #065f46;
+  border: 1px solid #047857;
+  border-radius: 8px;
+  color: #6ee7b7;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.forkBtn:hover:not(:disabled) {
+  background: #047857;
+}
+
+.forkBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -1,5 +1,5 @@
 // frontend/types/user.ts
-import type { TraceStep } from "@/types/trace";
+import type { TraceStep } from '@/types/trace';
 
 export interface SavedTrace {
   id: string;
@@ -15,7 +15,7 @@ export interface ReviewCard {
   id: string;
   trace_id: string;
   concept_tag: string;
-  next_review_date: string;  // ISO "YYYY-MM-DD" — string, NOT Date
+  next_review_date: string; // ISO "YYYY-MM-DD" — string, NOT Date
   interval_days: number;
   easiness_factor: number;
   repetitions: number;

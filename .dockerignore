@@ -1,0 +1,2 @@
+__pycache__ *.pyc .git .env .coverage .pytest_cache
+frontend/node_modules frontend/.next *.md tests/

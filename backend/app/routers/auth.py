@@ -3,13 +3,38 @@
 Supabase JWT verification — validates Bearer token and returns the user record.
 Used as a dependency by other routers: Depends(get_current_user)
 """
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Depends
 from typing import Optional
 import httpx
 import json
 import logging
 
 logger = logging.getLogger("codescope.auth")
+
+# ── Rate Limiter ────────────────────────────────────────────────
+_limiter = None
+try:
+    from slowapi import Limiter
+    from slowapi.util import get_remote_address
+    _limiter = Limiter(key_func=get_remote_address)
+except ImportError:
+    pass  # slowapi not installed — rate limiting disabled
+
+
+def _rate_limit(rate: str):
+    """Decorator factory for rate limiting."""
+    def decorator(func):
+        if _limiter is None:
+            return func
+        return _limiter.limit(rate)(func)
+    return decorator
+
+
+def get_rate_limit(rate: str):
+    """Dependency-based rate limiting."""
+    if _limiter is None:
+        return lambda: None
+    return _limiter.limit(rate)
 
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
@@ -59,9 +84,10 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     return user_data
 
 
-async def get_profile_id(authorization: str) -> str:
+async def get_profile_id(token: str) -> str:
     """
     Get the profiles.id for the authenticated user.
+    token: JWT string AFTER 'Bearer ' prefix has been stripped.
     The auth user id maps to profiles.user_id.
     """
     from app.config import Settings
@@ -70,9 +96,9 @@ async def get_profile_id(authorization: str) -> str:
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{settings.supabase_url}/rest/v1/profiles",
-            params={"user_id": f"eq.{authorization[7:]}", "select": "id"},
+            params={"user_id": f"eq.{token}", "select": "id"},
             headers={
-                "Authorization": f"Bearer {authorization}",
+                "Authorization": f"Bearer {settings.supabase_service_key}",
                 "apikey": settings.supabase_service_key,
             },
         )

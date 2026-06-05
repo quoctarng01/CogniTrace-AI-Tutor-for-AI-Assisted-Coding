@@ -1,9 +1,11 @@
 """FastAPI application entry point."""
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from uuid import uuid4
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import traces, llm, review, profiles, static_analysis, examples, ratings
+from app.routers.analytics import router as analytics_router
 
 
 @asynccontextmanager
@@ -41,6 +43,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ── Request correlation ID middleware ─────────────────────────────────────────
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    """Add correlation ID to each request for tracing."""
+    import structlog
+    request_id = request.headers.get("x-request-id", str(uuid4()))
+    structlog.contextvars.bind_contextvars(request_id=request_id)
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
 # ── SlowAPI rate limiting ─────────────────────────────────────────
 # Must be added BEFORE any routes that use @limiter.limit()
 try:
@@ -61,15 +74,13 @@ app.include_router(profiles.router, prefix="/profiles")
 app.include_router(static_analysis.router, prefix="/api")
 app.include_router(examples.router, prefix="/api/examples")
 app.include_router(ratings.router)
+app.include_router(analytics_router, prefix="/api")
+
+from app.config import settings
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "http://localhost:5173",
-    ],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -80,13 +91,14 @@ app.add_middleware(
 async def health():
     """
     Health check endpoint for Docker/liveness probes + readiness probes.
-    Checks Supabase connectivity.
+    Checks Supabase, Redis, and LLM provider connectivity.
     """
     from app.config import settings
     import httpx
+    from fastapi.responses import JSONResponse
     
-    checks: dict = {"status": "ok", "checks": {}}
-    healthy = True
+    checks: dict[str, dict[str, str | bool]] = {}
+    all_ok = True
     
     # Check Supabase connectivity
     try:
@@ -95,13 +107,44 @@ async def health():
                 f"{settings.supabase_url}/rest/v1/",
                 headers={"apikey": settings.supabase_service_key},
             )
-            checks["checks"]["supabase"] = "ok" if resp.status_code == 200 else f"error:{resp.status_code}"
+            checks["supabase"] = {
+                "ok": resp.status_code == 200,
+                "detail": "ok" if resp.status_code == 200 else f"error:{resp.status_code}"
+            }
             if resp.status_code != 200:
-                healthy = False
+                all_ok = False
     except Exception as e:
-        checks["checks"]["supabase"] = f"error:{type(e).__name__}"
-        healthy = False
+        checks["supabase"] = {"ok": False, "detail": f"error:{type(e).__name__}"}
+        all_ok = False
     
-    checks["status"] = "ok" if healthy else "degraded"
-    from fastapi.responses import JSONResponse
-    return JSONResponse(content=checks, status_code=200 if healthy else 503)
+    # Check Redis connectivity
+    try:
+        import redis
+        r = redis.from_url(settings.redis_url, socket_connect_timeout=3)
+        r.ping()
+        checks["redis"] = {"ok": True, "detail": "ok"}
+    except Exception as e:
+        checks["redis"] = {"ok": False, "detail": f"error:{type(e).__name__}"}
+        all_ok = False
+    
+    # Check LLM provider connectivity
+    try:
+        if settings.ollama_cloud_url:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{settings.ollama_cloud_url}/api/tags")
+                checks["llm"] = {
+                    "ok": resp.status_code == 200,
+                    "detail": "ok" if resp.status_code == 200 else f"error:{resp.status_code}"
+                }
+        elif settings.github_models_pat:
+            checks["llm"] = {"ok": True, "detail": "github_models_configured"}
+        else:
+            checks["llm"] = {"ok": True, "detail": "no_llm_provider"}
+    except Exception as e:
+        checks["llm"] = {"ok": False, "detail": f"error:{type(e).__name__}"}
+        all_ok = False
+    
+    return JSONResponse(
+        {"status": "healthy" if all_ok else "degraded", "checks": checks},
+        status_code=200 if all_ok else 503,
+    )

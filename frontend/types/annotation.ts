@@ -2,7 +2,7 @@
  * Static analysis annotation types — mirrors backend/app/routers/static_analysis.py.
  */
 
-export type AnnotationSeverity = "high" | "medium" | "low";
+export type AnnotationSeverity = 'high' | 'medium' | 'low';
 
 export interface Annotation {
   line: number;

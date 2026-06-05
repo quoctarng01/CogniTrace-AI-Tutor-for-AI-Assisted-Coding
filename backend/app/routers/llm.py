@@ -27,9 +27,7 @@ async def stream_explanation(
     line_number: int = Query(..., ge=1),
     line_content: str = Query(..., max_length=500),
     locals_json: str = Query(..., max_length=2000),
-    user_id: Optional[str] = Query(None),  # For authenticated users
-    ollama_endpoint: Optional[str] = Query(None),
-    x_forwarded_for: str | None = Header(None),
+    authorization: Optional[str] = Header(None),
 ):
     """
     Stream an LLM explanation for a specific line of code.
@@ -54,10 +52,17 @@ async def stream_explanation(
             detail={"error": "INVALID_JSON", "message": "locals_json must be valid JSON"},
         )
     
-    # 2. Rate limit check (only for anonymous/unauthenticated users)
+    # 2. Extract user_id ONLY from auth header — never from query params
+    user_id = None
+    if authorization:
+        from app.routers.auth import get_profile_id
+        token = authorization.replace("Bearer ", "")
+        user_id = await get_profile_id(token)
+    
+    # 3. Rate limit check (only for anonymous/unauthenticated users)
     # Authenticated Pro users bypass rate limiting
     if not user_id or not await _is_pro_user(user_id):
-        rate_key = x_forwarded_for or user_id or "anonymous"
+        rate_key = authorization.split(" ")[-1] if authorization else "anonymous"
         result = await check_rate_limit(rate_key)
         
         if not result.allowed:

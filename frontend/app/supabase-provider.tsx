@@ -1,9 +1,9 @@
 // frontend/app/supabase-provider.tsx
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
-import { getSupabase } from "@/lib/supabase";
+import { useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import { getSupabase } from '@/lib/supabase';
 
 export function SupabaseListener() {
   const router = useRouter();
@@ -11,9 +11,11 @@ export function SupabaseListener() {
 
   useEffect(() => {
     const supabase = getSupabase();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(event => {
       // Refresh the current route on any auth event — keeps UI in sync across tabs
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "TOKEN_REFRESHED") {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
         router.refresh();
       }
     });

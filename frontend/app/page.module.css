@@ -187,9 +187,15 @@
   background: #30363d;
 }
 
-.dot:first-child { background: #f85149; }
-.dot:nth-child(2) { background: #d29922; }
-.dot:nth-child(3) { background: #3fb950; }
+.dot:first-child {
+  background: #f85149;
+}
+.dot:nth-child(2) {
+  background: #d29922;
+}
+.dot:nth-child(3) {
+  background: #3fb950;
+}
 
 .windowTitle {
   margin-left: auto;

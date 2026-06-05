@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useCallback, useState } from "react";
-import dynamic from "next/dynamic";
-import styles from "./CodeEditor.module.css";
-import { CodeEditorSkeleton } from "./CodeEditorSkeleton";
-import type { Annotation } from "@/types/annotation";
+import { useEffect, useRef, useCallback, useState } from 'react';
+import dynamic from 'next/dynamic';
+import styles from './CodeEditor.module.css';
+import { CodeEditorSkeleton } from './CodeEditorSkeleton';
+import type { Annotation } from '@/types/annotation';
 
-const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
+const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
 interface CodeEditorProps {
   code: string;
@@ -27,7 +27,7 @@ export function CodeEditor({
   currentLine,
   annotations = [],
   readOnly = false,
-  height = "100%",
+  height = '100%',
 }: CodeEditorProps) {
   const editorRef = useRef<unknown>(null);
   const monacoRef = useRef<unknown>(null);
@@ -49,19 +49,19 @@ export function CodeEditor({
     if (!editor?.getModel) return;
 
     const severityToMonaco = {
-      high: "error" as const,
-      medium: "warning" as const,
-      low: "hint" as const,
+      high: 'error' as const,
+      medium: 'warning' as const,
+      low: 'hint' as const,
     };
 
-    const markers = annotations.map((ann) => ({
-      severity: severityToMonaco[ann.severity] ?? "hint",
+    const markers = annotations.map(ann => ({
+      severity: severityToMonaco[ann.severity] ?? 'hint',
       startLineNumber: ann.line,
       startColumn: 1,
       endLineNumber: ann.line,
       endColumn: Number.MAX_SAFE_INTEGER,
       message: `[${ann.pattern_id}] ${ann.message}\n\nSuggestion: ${ann.suggestion}`,
-      source: "CodeScope",
+      source: 'CodeScope',
     }));
 
     const model = editor.getModel();
@@ -69,45 +69,50 @@ export function CodeEditor({
 
     // Monaco API: monaco.editor.setModelMarkers(model, owner, markers)
     if (monaco?.editor?.setModelMarkers) {
-      monaco.editor.setModelMarkers(model, "codescope-analyzer", markers);
+      monaco.editor.setModelMarkers(model, 'codescope-analyzer', markers);
     } else {
       // Fallback: setModelMarkers on the model itself (older Monaco API)
       (model as { setModelMarkers: (owner: string, markers: unknown[]) => void }).setModelMarkers(
-        "codescope-analyzer",
+        'codescope-analyzer',
         markers
       );
     }
 
     return () => {
       if (monaco?.editor?.setModelMarkers) {
-        monaco.editor.setModelMarkers(model, "codescope-analyzer", []);
+        monaco.editor.setModelMarkers(model, 'codescope-analyzer', []);
       } else {
         (model as { setModelMarkers: (owner: string, markers: unknown[]) => void }).setModelMarkers(
-          "codescope-analyzer",
+          'codescope-analyzer',
           []
         );
       }
     };
   }, [annotations, isEditorReady]);
 
-  const handleMount = useCallback((editor: unknown, monaco: unknown) => {
-    if (!isMountedRef.current) return;
-    editorRef.current = editor;
-    monacoRef.current = monaco;
-    setIsEditorReady(true);
+  const handleMount = useCallback(
+    (editor: unknown, monaco: unknown) => {
+      if (!isMountedRef.current) return;
+      editorRef.current = editor;
+      monacoRef.current = monaco;
+      setIsEditorReady(true);
 
-    // Add line click handler
-    const monacoEditor = editor as {
-      onMouseDown: (callback: (e: { target: { position?: { lineNumber?: number } } }) => void) => void;
-    };
-    if (onLineClick && monacoEditor?.onMouseDown) {
-      monacoEditor.onMouseDown((e) => {
-        if (e.target?.position?.lineNumber) {
-          onLineClick(e.target.position.lineNumber);
-        }
-      });
-    }
-  }, [onLineClick]);
+      // Add line click handler
+      const monacoEditor = editor as {
+        onMouseDown: (
+          callback: (e: { target: { position?: { lineNumber?: number } } }) => void
+        ) => void;
+      };
+      if (onLineClick && monacoEditor?.onMouseDown) {
+        monacoEditor.onMouseDown(e => {
+          if (e.target?.position?.lineNumber) {
+            onLineClick(e.target.position.lineNumber);
+          }
+        });
+      }
+    },
+    [onLineClick]
+  );
 
   // Update line decorations whenever currentLine changes
   useEffect(() => {
@@ -176,16 +181,16 @@ export function CodeEditor({
         language="python"
         theme="vs-dark"
         value={code}
-        onChange={(value) => onChange?.(value ?? "")}
+        onChange={value => onChange?.(value ?? '')}
         options={{
           readOnly,
           minimap: { enabled: false },
-          lineNumbers: "on",
+          lineNumbers: 'on',
           fontSize: 14,
           fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
           fontLigatures: true,
           scrollBeyondLastLine: false,
-          renderLineHighlight: "none",
+          renderLineHighlight: 'none',
           overviewRulerBorder: false,
           hideCursorInOverviewRuler: true,
           scrollbar: {
@@ -194,16 +199,16 @@ export function CodeEditor({
           },
           padding: { top: 16, bottom: 16 },
           lineHeight: 24,
-          cursorBlinking: "smooth",
+          cursorBlinking: 'smooth',
           smoothScrolling: true,
-          wordWrap: "on",
+          wordWrap: 'on',
           automaticLayout: true,
           tabSize: 4,
           insertSpaces: true,
           folding: false,
           glyphMargin: true,
           contextmenu: !readOnly,
-          renderWhitespace: "none",
+          renderWhitespace: 'none',
         }}
         loading={<CodeEditorSkeleton />}
         onMount={handleMount}

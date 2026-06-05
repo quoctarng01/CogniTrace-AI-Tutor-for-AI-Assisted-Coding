@@ -12,7 +12,7 @@ from pathlib import Path
 from tracer.models import SandboxError
 
 
-def run_trace(source: str, max_steps: int = 500, timeout_seconds: int = 5) -> dict:
+def run_trace(source: str, max_steps: int = 500, initial_namespace: dict | None = None, timeout_seconds: int = 5) -> dict:
     """
     Execute user code in an isolated subprocess.
     Returns: {"steps": [...], "total_steps": int, "duration_ms": float}
@@ -24,14 +24,20 @@ def run_trace(source: str, max_steps: int = 500, timeout_seconds: int = 5) -> di
             # Add backend/ to path so 'tracer' is importable as a package
             backend_dir = str(Path(__file__).parent.parent)
             escaped_dir = backend_dir.replace("\\", "\\\\")
+            
+            # Serialize initial_namespace to JSON for passing to subprocess
+            ns_json = json.dumps(initial_namespace or {})
+            
             f.write(f"import sys, json, io, time\n")
             f.write(f"sys.path.insert(0, r'{escaped_dir}')\n")
             # Capture stdout so print() doesn't pollute JSON output
             f.write(f"sys.stdout = io.StringIO()\n")
             f.write(f"from tracer import tracer as _tracer\n")
             f.write(f"from tracer.models import SandboxError\n")
+            f.write(f"ns_json = {repr(ns_json)}\n")
+            f.write(f"initial_namespace = json.loads(ns_json) if ns_json and ns_json != 'null' else None\n")
             f.write(f"try:\n")
-            f.write(f"    result = _tracer.run_trace({repr(source)}, max_steps={max_steps})\n")
+            f.write(f"    result = _tracer.run_trace({repr(source)}, max_steps={max_steps}, initial_namespace=initial_namespace)\n")
             f.write(f"except SandboxError as e:\n")
             f.write(f"    result = {{'error': 'SANDBOX_ERROR', 'message': str(e), 'pattern': e.pattern}}\n")
             f.write(f"sys.stdout = sys.__stdout__\n")

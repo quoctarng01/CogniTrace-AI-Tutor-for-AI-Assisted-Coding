@@ -1,4 +1,5 @@
 """Application configuration. Reads from .env file."""
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -12,6 +13,18 @@ class Settings(BaseSettings):
     # Supabase (Phase 2+)
     supabase_url: str = "http://localhost:54321"
     supabase_service_key: str = "postgres"
+    
+    # CORS - Load from env: ALLOWED_ORIGINS=http://localhost:3000,https://codescope.vercel.app
+    allowed_origins: list[str] = Field(
+        default=["http://localhost:3000", "http://localhost:3001"],
+    )
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, v):
+        if isinstance(v, str):
+            return [s.strip() for s in v.split(",") if s.strip()]
+        return v
 
     # Redis (Phase 2+)
     redis_enabled: bool = False

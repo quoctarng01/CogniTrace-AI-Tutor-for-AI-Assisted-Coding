@@ -36,13 +36,23 @@
       "free": {
         "title": "Miễn phí",
         "price": "$0",
-        "features": ["50 trace mỗi tháng", "20 câu hỏi \"tại sao\" mỗi giờ", "Trực quan hóa code cơ bản"]
+        "features": [
+          "50 trace mỗi tháng",
+          "20 câu hỏi \"tại sao\" mỗi giờ",
+          "Trực quan hóa code cơ bản"
+        ]
       },
       "pro": {
         "title": "Pro",
         "price": "$15",
         "period": "mỗi tháng",
-        "features": ["Không giới hạn trace", "Không giới hạn câu hỏi \"tại sao\"", "Hàng đợi ôn tập & nhắc lại cách quãng", "Chia sẻ link trace", "Hỗ trợ ưu tiên"]
+        "features": [
+          "Không giới hạn trace",
+          "Không giới hạn câu hỏi \"tại sao\"",
+          "Hàng đợi ôn tập & nhắc lại cách quãng",
+          "Chia sẻ link trace",
+          "Hỗ trợ ưu tiên"
+        ]
       }
     }
   },

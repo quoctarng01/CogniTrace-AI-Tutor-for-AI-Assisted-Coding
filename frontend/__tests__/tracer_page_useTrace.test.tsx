@@ -1,15 +1,15 @@
-import React from "react";
-import { render, screen } from "@testing-library/react";
-import { vi, describe, it, expect } from "vitest";
-import TracerPage from "@/app/tracer/page";
-import { useTrace } from "@/hooks/useTrace";
-import { useRouter } from "next/navigation";
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import { vi, describe, it, expect } from 'vitest';
+import TracerPage from '@/app/tracer/page';
+import { useTrace } from '@/hooks/useTrace';
+import { useRouter } from 'next/navigation';
 
 // Mock all dependencies
-vi.mock("@/hooks/useTrace", () => ({
+vi.mock('@/hooks/useTrace', () => ({
   useTrace: vi.fn(() => ({
     currentStep: 0,
-    playbackState: "idle",
+    playbackState: 'idle',
     speed: 1 as const,
     currentStepData: null,
     play: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock("@/hooks/useTrace", () => ({
   })),
 }));
 
-vi.mock("next/navigation", () => ({
+vi.mock('next/navigation', () => ({
   useRouter: vi.fn(() => ({
     push: vi.fn(),
     replace: vi.fn(),
@@ -31,11 +31,11 @@ vi.mock("next/navigation", () => ({
     back: vi.fn(),
     forward: vi.fn(),
   })),
-  usePathname: vi.fn(() => "/tracer"),
+  usePathname: vi.fn(() => '/tracer'),
   useSearchParams: vi.fn(() => new URLSearchParams()),
 }));
 
-vi.mock("@/lib/api", () => ({
+vi.mock('@/lib/api', () => ({
   api: {
     runTrace: vi.fn(),
     analyzeCode: vi.fn(),
@@ -43,7 +43,7 @@ vi.mock("@/lib/api", () => ({
   saveTrace: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase", () => ({
+vi.mock('@/lib/supabase', () => ({
   getSupabase: vi.fn(() => ({
     auth: {
       getSession: vi.fn(),
@@ -52,17 +52,17 @@ vi.mock("@/lib/supabase", () => ({
   getAuthToken: vi.fn(() => Promise.resolve(null)),
 }));
 
-vi.mock("@/components/editor/CodeEditor", () => ({
+vi.mock('@/components/editor/CodeEditor', () => ({
   CodeEditor: () => <div data-testid="mock-editor">Mock Editor</div>,
 }));
 
-describe("TracerPage", () => {
-  it("uses useTrace hook instead of manual state", () => {
+describe('TracerPage', () => {
+  it('uses useTrace hook instead of manual state', () => {
     render(<TracerPage />);
     expect(useTrace).toHaveBeenCalled();
   });
 
-  it("passes useTrace state to AnimationControls", () => {
+  it('passes useTrace state to AnimationControls', () => {
     render(<TracerPage />);
     expect(useTrace).toHaveBeenCalledWith(
       expect.objectContaining({

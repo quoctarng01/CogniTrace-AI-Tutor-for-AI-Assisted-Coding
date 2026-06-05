@@ -1,27 +1,27 @@
 /**
  * SM-2 Spaced Repetition Algorithm.
- * 
+ *
  * Implementation of the SuperMemo 2 algorithm for scheduling review sessions.
- * 
+ *
  * Quality ratings:
  *   again (0) → quality 1 — complete blackout, reset to 1 day
  *   hard (1)  → quality 2 — incorrect but remembered easily
  *   good (2)   → quality 3 — correct with some difficulty
  *   easy (3)   → quality 5 — perfect recall
- * 
+ *
  * Easiness Factor (EF):
  *   Minimum: 1.3
  *   Default: 2.5
  *   Formula: EF' = EF + (0.1 - (5-q) * (0.08 + (5-q) * 0.02))
  */
 
-export type Rating = "again" | "hard" | "good" | "easy";
+export type Rating = 'again' | 'hard' | 'good' | 'easy';
 
 export interface SM2Params {
-  quality: number;        // 0-5
+  quality: number; // 0-5
   easinessFactor: number; // minimum 1.3
-  intervalDays: number;   // current interval
-  repetitions: number;    // consecutive correct answers
+  intervalDays: number; // current interval
+  repetitions: number; // consecutive correct answers
 }
 
 export interface SM2Result {
@@ -40,7 +40,7 @@ const RATING_MAP: Record<Rating, number> = {
   easy: 5,
 };
 
-export function sm2(rating: Rating, params: Omit<SM2Params, "quality">): SM2Result {
+export function sm2(rating: Rating, params: Omit<SM2Params, 'quality'>): SM2Result {
   const { easinessFactor: ef, intervalDays: interval, repetitions: reps } = params;
   const q = RATING_MAP[rating];
 
@@ -88,7 +88,7 @@ export function reviewToSM2Params(card: {
   repetitions: number;
 }): SM2Params {
   return {
-    quality: 0,  // Will be set by caller
+    quality: 0, // Will be set by caller
     easinessFactor: card.easiness_factor,
     intervalDays: card.interval_days,
     repetitions: card.repetitions,
@@ -103,7 +103,7 @@ export function calculateStreak(reviewHistory: Array<{ date: string }>): number 
 
   // Get unique review dates
   const reviewDates = new Set(
-    reviewHistory.map((r) => {
+    reviewHistory.map(r => {
       const d = new Date(r.date);
       d.setHours(0, 0, 0, 0);
       return d.getTime();
@@ -113,8 +113,10 @@ export function calculateStreak(reviewHistory: Array<{ date: string }>): number 
   let streak = 0;
   let checkDate = new Date(today);
 
-  while (reviewDates.has(checkDate.getTime()) || 
-         (streak === 0 && reviewDates.has(new Date(checkDate.getTime() - 86400000).getTime()))) {
+  while (
+    reviewDates.has(checkDate.getTime()) ||
+    (streak === 0 && reviewDates.has(new Date(checkDate.getTime() - 86400000).getTime()))
+  ) {
     if (reviewDates.has(checkDate.getTime())) {
       streak++;
     }
@@ -133,8 +135,8 @@ export function formatNextReview(date: Date): string {
 
   const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
 
-  if (diffDays <= 0) return "Due today";
-  if (diffDays === 1) return "Due tomorrow";
+  if (diffDays <= 0) return 'Due today';
+  if (diffDays === 1) return 'Due tomorrow';
   if (diffDays < 7) return `Due in ${diffDays} days`;
   if (diffDays < 30) return `Due in ${Math.round(diffDays / 7)} weeks`;
   return `Due in ${Math.round(diffDays / 30)} months`;

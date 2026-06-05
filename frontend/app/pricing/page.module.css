@@ -1,0 +1,144 @@
+.container {
+  min-height: 100vh;
+  padding: 4rem 2rem;
+  background: var(--bg-primary, #0f172a);
+  color: var(--text-primary, #f8fafc);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.container h1 {
+  font-size: 2.5rem;
+  margin-bottom: 3rem;
+  text-align: center;
+}
+
+.tiers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  max-width: 800px;
+  width: 100%;
+}
+
+.freeTier,
+.proTier {
+  background: var(--bg-secondary, #1e293b);
+  border-radius: 12px;
+  padding: 2rem;
+  border: 1px solid var(--border-color, #334155);
+}
+
+.proTier {
+  border-color: var(--accent, #6366f1);
+  position: relative;
+}
+
+.proTier::before {
+  content: 'Most Popular';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent, #6366f1);
+  color: white;
+  padding: 4px 16px;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.tiers h2 {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.price {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+}
+
+.price span {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.tiers ul {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 2rem;
+}
+
+.tiers li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-color, #334155);
+}
+
+.tiers li:last-child {
+  border-bottom: none;
+}
+
+.cta {
+  display: block;
+  text-align: center;
+  padding: 0.75rem 1.5rem;
+  background: var(--accent, #6366f1);
+  color: white;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.cta:hover {
+  background: #4f46e5;
+}
+
+.proTier .cta {
+  background: transparent;
+  border: 2px solid var(--accent, #6366f1);
+  color: var(--accent, #6366f1);
+}
+
+.proTier .cta:hover {
+  background: var(--accent, #6366f1);
+  color: white;
+}
+
+.tiers form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.tiers input {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #334155);
+  background: var(--bg-primary, #0f172a);
+  color: var(--text-primary, #f8fafc);
+  font-size: 1rem;
+}
+
+.tiers input:focus {
+  outline: none;
+  border-color: var(--accent, #6366f1);
+}
+
+.tiers button {
+  padding: 0.75rem 1.5rem;
+  background: var(--accent, #6366f1);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.tiers button:hover {
+  background: #4f46e5;
+}

@@ -1,0 +1,60 @@
+{
+  "name": "codescope-round4-impl",
+  "version": "1.0.0",
+  "description": "Implements CodeScope Round 4 features: Shared Trace Links, What-If Sandbox, and Trace Replay from Saved State. Extends codescope-impl skill. Use after codescope-impl is complete.",
+  "author": "CodeScope Team",
+  "created": "2026-05-19",
+  "last_updated": "2026-05-19",
+  "prerequisites": [
+    "codescope-impl (must be complete first)",
+    "Phase 1 (backend tracer) must be runnable",
+    "Phase 1B (frontend) must build successfully",
+    "Phase 1C (AI explanations) must be functional"
+  ],
+  "dependencies": [
+    "bcrypt (pip install)",
+    "Supabase migrations DB-1 and DB-2 must be applied"
+  ],
+  "features": [
+    "Shared Trace Links with expiry, password, fork, analytics",
+    "What-If Sandbox with initial_namespace override",
+    "Trace Replay from Saved State via useTrace hook"
+  ],
+  "phases": [
+    "DB: Supabase migrations (DB-1: steps column, DB-2: share enhancements)",
+    "1C: Backend — save steps in traces table",
+    "1B: Backend — share endpoint with expiry/password/fork",
+    "3A: Backend — initial_namespace in tracer.py",
+    "3B: Backend — initial_namespace through subprocess runner",
+    "3C: Backend — API accepts initial_namespace",
+    "5B: Backend — verify review returns steps",
+    "1D: Frontend — Share button + modal",
+    "1E: Frontend — shared page update (fork, password, expiry)",
+    "1F: Frontend — Open Graph meta tags",
+    "3D: Frontend — WhatIfModal component",
+    "3E: Frontend — wire WhatIf into tracer page",
+    "5A: Frontend — review page uses useTrace hook"
+  ],
+  "verification": {
+    "backend_tests": "pytest backend/tests/ -v",
+    "frontend_build": "npm run build",
+    "manual_smoke_tests": "See Final Verification Checklist in skill"
+  },
+  "files_created": [
+    "frontend/components/tracer/WhatIfModal.tsx",
+    "frontend/components/tracer/WhatIfModal.module.css"
+  ],
+  "files_modified": [
+    "backend/tracer/tracer.py",
+    "backend/tracer/runner.py",
+    "backend/app/routers/traces.py",
+    "backend/app/routers/review.py",
+    "frontend/lib/api.ts",
+    "frontend/app/tracer/page.tsx",
+    "frontend/app/tracer/page.module.css",
+    "frontend/app/trace/[share_token]/page.tsx",
+    "frontend/app/trace/[share_token]/share.module.css",
+    "frontend/app/review/[card_id]/page.tsx",
+    "frontend/app/review/[card_id]/review.module.css"
+  ]
+}

@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useCallback, useRef, useEffect } from "react";
-import type { PlaybackSpeed, PlaybackState } from "@/hooks/useTrace";
-import type { TraceStep } from "@/types/trace";
-import styles from "./AnimationControls.module.css";
+import { useCallback, useRef, useEffect } from 'react';
+import type { PlaybackSpeed, PlaybackState } from '@/hooks/useTrace';
+import type { TraceStep } from '@/types/trace';
+import styles from './AnimationControls.module.css';
 
 interface AnimationControlsProps {
   steps: TraceStep[];
@@ -44,7 +44,7 @@ export function AnimationControls({
   // FIX-MD-07: useTrace is called in parent (page.tsx), not here
   // This prevents the double-hook problem that caused inconsistent state
 
-  const hookStep = currentStep;  // Use prop instead of internal hook state
+  const hookStep = currentStep; // Use prop instead of internal hook state
   const SPEEDS: PlaybackSpeed[] = [0.5, 1, 2, 5];
 
   const progressPercent = totalSteps > 0 ? (hookStep / (totalSteps - 1)) * 100 : 0;
@@ -66,13 +66,10 @@ export function AnimationControls({
           Step {hookStep + 1} / {totalSteps}
         </span>
         <div className={styles.progressTrack}>
-          <div
-            className={styles.progressFill}
-            style={{ width: `${progressPercent}%` }}
-          />
+          <div className={styles.progressFill} style={{ width: `${progressPercent}%` }} />
         </div>
         <span className={styles.durationLabel}>
-          {durationMs > 0 ? `${(durationMs / 1000).toFixed(1)}s` : ""}
+          {durationMs > 0 ? `${(durationMs / 1000).toFixed(1)}s` : ''}
         </span>
       </div>
 
@@ -104,12 +101,12 @@ export function AnimationControls({
 
         {/* Play / Pause */}
         <button
-          className={`${styles.playBtn} ${playbackState === "playing" ? styles.playing : ""}`}
+          className={`${styles.playBtn} ${playbackState === 'playing' ? styles.playing : ''}`}
           onClick={togglePlayPause}
-          title={`${playbackState === "playing" ? "Pause" : "Play"} (Space)`}
-          aria-label={playbackState === "playing" ? "Pause" : "Play"}
+          title={`${playbackState === 'playing' ? 'Pause' : 'Play'} (Space)`}
+          aria-label={playbackState === 'playing' ? 'Pause' : 'Play'}
         >
-          {playbackState === "playing" ? "⏸" : "▶"}
+          {playbackState === 'playing' ? '⏸' : '▶'}
         </button>
 
         {/* Step forward */}
@@ -139,10 +136,10 @@ export function AnimationControls({
 
         {/* Speed selector */}
         <div className={styles.speedSelector}>
-          {SPEEDS.map((s) => (
+          {SPEEDS.map(s => (
             <button
               key={s}
-              className={`${styles.speedBtn} ${speed === s ? styles.activeSpeed : ""}`}
+              className={`${styles.speedBtn} ${speed === s ? styles.activeSpeed : ''}`}
               onClick={() => setSpeed(s)}
               aria-label={`Set speed to ${s}x`}
             >
@@ -153,10 +150,8 @@ export function AnimationControls({
       </div>
 
       {/* State indicator */}
-      {playbackState === "ended" && (
-        <div className={styles.stateIndicator}>
-          Trace complete — press ← to review
-        </div>
+      {playbackState === 'ended' && (
+        <div className={styles.stateIndicator}>Trace complete — press ← to review</div>
       )}
     </div>
   );
