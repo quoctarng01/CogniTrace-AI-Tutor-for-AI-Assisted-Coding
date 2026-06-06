@@ -55,10 +55,10 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 480 }: Moda
           position: 'relative',
           width: '100%',
           maxWidth: `${maxWidth}px`,
-          background: '#161b22',
-          border: '1px solid #30363d',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
           borderRadius: '12px',
-          boxShadow: '0 16px 64px rgba(0,0,0,0.5)',
+          boxShadow: 'var(--shadow-md)',
           overflow: 'hidden',
         }}
       >
@@ -69,14 +69,15 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 480 }: Moda
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '16px 20px',
-              borderBottom: '1px solid #21262d',
+              borderBottom: '1px solid var(--border)',
             }}
           >
             <h2
               style={{
-                fontSize: '15px',
-                fontWeight: 700,
-                color: '#e6edf3',
+                fontSize: '16px',
+                fontWeight: 600,
+                color: 'var(--text)',
+                fontFamily: 'var(--font-serif), Georgia, serif',
               }}
             >
               {title}
@@ -87,19 +88,26 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 480 }: Moda
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: '#484f58',
+                color: 'var(--text-muted)',
                 cursor: 'pointer',
                 fontSize: '16px',
                 padding: '4px 8px',
                 borderRadius: '4px',
                 lineHeight: 1,
+                transition: 'color 0.15s ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = 'var(--text)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = 'var(--text-muted)';
               }}
             >
               ✕
             </button>
           </div>
         )}
-        <div style={{ padding: '20px' }}>{children}</div>
+        <div style={{ padding: '20px', color: 'var(--text)' }}>{children}</div>
       </div>
     </div>
   );

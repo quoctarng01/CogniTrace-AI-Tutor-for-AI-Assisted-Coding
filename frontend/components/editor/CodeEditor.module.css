@@ -9,16 +9,16 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  background: #0d1117;
-  color: #484f58;
+  background: var(--bg);
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 /* Highlight for the currently executing line */
 .currentLineHighlight {
-  background: rgba(31, 111, 235, 0.15) !important;
+  background: var(--accent-bg) !important;
 }
 
 .currentLineBorder {
-  border-left: 3px solid #1f6feb;
+  border-left: 3px solid var(--accent);
 }

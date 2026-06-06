@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { api, saveTrace, shareTrace, runTrace as runTraceApi } from '@/lib/api';
 import { getSupabase, getAuthToken } from '@/lib/supabase';
+import { trackEvent } from '@/lib/analytics';
 import type { TraceResult, TraceStep } from '@/types/trace';
 import type { Annotation } from '@/types/annotation';
 import { useTrace } from '@/hooks/useTrace';
@@ -12,6 +13,7 @@ import { VariablePanel } from '@/components/tracer/VariablePanel';
 import { AnimationControls } from '@/components/tracer/AnimationControls';
 import { ExplanationPanel } from '@/components/llm/ExplanationPanel';
 import { WhatIfModal } from '@/components/tracer/WhatIfModal';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import {
   EditorErrorBoundary,
   VariablePanelErrorBoundary,
@@ -116,6 +118,16 @@ export default function TracerPage() {
     checkAuth();
   }, []);
 
+  // ── Track session time-on-task ───────────────────────────────────
+  useEffect(() => {
+    trackEvent('tracer_session_started');
+    const startTime = Date.now();
+    return () => {
+      const durationSeconds = (Date.now() - startTime) / 1000;
+      trackEvent('tracer_session_ended', { duration_seconds: durationSeconds });
+    };
+  }, []);
+
   // ── Debounced static analysis on code change ─────────────────────
   useEffect(() => {
     if (!code.trim()) {
@@ -153,6 +165,10 @@ export default function TracerPage() {
     try {
       await saveTrace({ code, steps: traceResult.steps, concept_tags: extractConceptTags(code) });
       setSaveSuccess(true);
+      trackEvent('trace_saved', {
+        concept_tags: extractConceptTags(code),
+        steps_count: traceResult.steps.length,
+      });
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       if (err instanceof Error && err.message.includes('UPGRADE_REQUIRED')) {
@@ -183,6 +199,10 @@ export default function TracerPage() {
         password: sharePassword || undefined,
       });
       setShareResult(result);
+      trackEvent('trace_shared', {
+        expiration_days: expirationDays,
+        has_password: !!sharePassword,
+      });
     } catch (err) {
       setShareError(err instanceof Error ? err.message : 'Failed to generate share link');
     } finally {
@@ -198,14 +218,25 @@ export default function TracerPage() {
     setTraceResult(null);
 
     try {
+      trackEvent('trace_run_started', {
+        code_length: code.length,
+        concept_tags: extractConceptTags(code),
+      });
       const result = await api.runTrace(code);
       setTraceResult(result);
       if (result.error) {
         setError(result.error_message ?? result.error);
+        trackEvent('trace_run_failed', { error: result.error });
+      } else {
+        trackEvent('trace_run_completed', {
+          total_steps: result.total_steps,
+          duration_ms: result.duration_ms,
+        });
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to run trace';
       setError(msg);
+      trackEvent('trace_run_failed', { error: msg });
     } finally {
       setIsLoading(false);
     }
@@ -214,14 +245,20 @@ export default function TracerPage() {
   const handleLineClick = useCallback((lineNumber: number) => {
     setSelectedLine(lineNumber);
     setShowExplanation(false);
+    trackEvent('editor_line_clicked', { line_number: lineNumber });
   }, []);
 
   const handleWhyIsThisHere = useCallback(() => {
     // Enable if we have a selected line OR if we're tracing (currentStepData has a line)
     if (selectedLine !== null || currentStepData?.line_number) {
+      const line = selectedLine ?? currentStepData?.line_number ?? 1;
       setShowExplanation(true);
+      trackEvent('ai_explanation_requested', {
+        line_number: line,
+        line_content: code.split('\n')[line - 1] ?? '',
+      });
     }
-  }, [selectedLine, currentStepData]);
+  }, [selectedLine, currentStepData, code]);
 
   const currentLine = currentStepData?.line_number ?? selectedLine ?? 1;
   const whyButtonDisabled = selectedLine === null && !currentStepData?.line_number;
@@ -244,6 +281,7 @@ export default function TracerPage() {
           </button>
         )}
         <div className={styles.actions}>
+          <ThemeToggle />
           {isAnalyzing && <span className={styles.analyzingBadge}>◈ Analyzing…</span>}
           {!isAnalyzing && annotations.length > 0 && (
             <span className={styles.annotationCount}>
@@ -334,14 +372,38 @@ export default function TracerPage() {
             durationMs={traceResult.duration_ms}
             playbackState={playbackState}
             speed={speed}
-            play={play}
-            pause={pause}
-            togglePlayPause={togglePlayPause}
-            stepForward={stepForward}
-            stepBackward={stepBackward}
-            jumpToStep={jumpToStep}
-            setSpeed={setSpeed}
-            reset={reset}
+            play={() => {
+              play();
+              trackEvent('trace_playback_started', { current_step: currentStep });
+            }}
+            pause={() => {
+              pause();
+              trackEvent('trace_playback_paused', { current_step: currentStep });
+            }}
+            togglePlayPause={() => {
+              togglePlayPause();
+              trackEvent('trace_playback_toggled', { current_step: currentStep, state: playbackState });
+            }}
+            stepForward={() => {
+              stepForward();
+              trackEvent('trace_step_navigated', { direction: 'forward', current_step: currentStep + 1 });
+            }}
+            stepBackward={() => {
+              stepBackward();
+              trackEvent('trace_step_navigated', { direction: 'backward', current_step: currentStep - 1 });
+            }}
+            jumpToStep={(step) => {
+              jumpToStep(step);
+              trackEvent('trace_step_jumped', { step });
+            }}
+            setSpeed={(newSpeed) => {
+              setSpeed(newSpeed);
+              trackEvent('trace_speed_changed', { speed: newSpeed });
+            }}
+            reset={() => {
+              reset();
+              trackEvent('trace_reset');
+            }}
           />
           <div className={styles.lineActions}>
             <button
@@ -489,6 +551,9 @@ export default function TracerPage() {
             setTraceResult(null);
             setError(null);
             reset();
+            trackEvent('what_if_submitted', {
+              changed_variables: Object.keys(initialNamespace),
+            });
             try {
               const result = await runTraceApi(code, { initialNamespace });
               if (result.error) {

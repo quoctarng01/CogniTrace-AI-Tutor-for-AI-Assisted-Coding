@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import styles from './page.module.css';
 
 const CODE_SAMPLES = [
@@ -69,6 +70,7 @@ export default function Home() {
           <Link href="/dashboard" className={styles.navLink}>
             Dashboard
           </Link>
+          <ThemeToggle />
         </nav>
       </header>
 

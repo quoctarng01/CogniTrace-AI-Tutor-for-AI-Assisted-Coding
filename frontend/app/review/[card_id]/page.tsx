@@ -1,7 +1,7 @@
 // frontend/app/review/[card_id]/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -10,6 +10,7 @@ import { fetchReviewCard, submitReviewRating } from '@/lib/api';
 import { formatNextReview } from '@/lib/sm2';
 import type { ReviewCardDetail } from '@/types/user';
 import { useTrace } from '@/hooks/useTrace';
+import { trackEvent } from '@/lib/analytics';
 import styles from './review.module.css';
 
 const CodeEditor = dynamic(() => import('@/components/editor/CodeEditor').then(m => m.CodeEditor), {
@@ -37,6 +38,26 @@ export default function ReviewPage() {
   const [nextReview, setNextReview] = useState<string | null>(null);
   const [nextInterval, setNextInterval] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const cardRef = useRef<ReviewCardDetail | null>(null);
+
+  useEffect(() => {
+    cardRef.current = card;
+  }, [card]);
+
+  // ── Track session time-on-task ───────────────────────────────────
+  useEffect(() => {
+    trackEvent('review_session_started', { card_id: cardId });
+    const startTime = Date.now();
+    return () => {
+      const durationSeconds = (Date.now() - startTime) / 1000;
+      trackEvent('review_session_ended', {
+        card_id: cardId,
+        duration_seconds: durationSeconds,
+        concept_tag: cardRef.current?.concept_tag,
+      });
+    };
+  }, [cardId]);
 
   // REPLAY: Use saved steps from the card (NOT re-execution).
   // Backend returns card.trace.steps from the traces.steps JSONB column.
@@ -92,14 +113,28 @@ export default function ReviewPage() {
     async (r: 'again' | 'hard' | 'good' | 'easy') => {
       setRating(r);
       setReviewState('submitting');
+      trackEvent('review_rating_submitted', {
+        card_id: cardId,
+        rating: r,
+        concept_tag: cardRef.current?.concept_tag,
+      });
       try {
         const result = await submitReviewRating(cardId, r);
         setNextReview(result.next_review_date);
         setNextInterval(result.new_interval_days);
         setReviewState('submitted');
+        trackEvent('review_rating_saved', {
+          card_id: cardId,
+          rating: r,
+          new_interval_days: result.new_interval_days,
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to submit review');
         setReviewState('rating'); // Return to rating so user can retry
+        trackEvent('review_rating_failed', {
+          card_id: cardId,
+          error: err instanceof Error ? err.message : 'Failed to submit',
+        });
       }
     },
     [cardId]
@@ -165,11 +200,32 @@ export default function ReviewPage() {
               Step {currentStep + 1} / {steps.length}
             </div>
             <div className={styles.controlsRow}>
-              <button onClick={stepBackward} disabled={currentStep === 0}>⏮</button>
-              <button onClick={togglePlayPause}>
+              <button
+                onClick={() => {
+                  stepBackward();
+                  trackEvent('review_step_navigated', { direction: 'backward', current_step: currentStep - 1, card_id: cardId });
+                }}
+                disabled={currentStep === 0}
+              >
+                ⏮
+              </button>
+              <button
+                onClick={() => {
+                  togglePlayPause();
+                  trackEvent('review_playback_toggled', { current_step: currentStep, state: playbackState, card_id: cardId });
+                }}
+              >
                 {playbackState === 'playing' ? '⏸' : '▶'}
               </button>
-              <button onClick={stepForward} disabled={currentStep >= steps.length - 1}>⏭</button>
+              <button
+                onClick={() => {
+                  stepForward();
+                  trackEvent('review_step_navigated', { direction: 'forward', current_step: currentStep + 1, card_id: cardId });
+                }}
+                disabled={currentStep >= steps.length - 1}
+              >
+                ⏭
+              </button>
             </div>
           </>
         )}

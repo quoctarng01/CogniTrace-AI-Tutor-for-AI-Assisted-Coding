@@ -94,9 +94,27 @@ async def get_profile_id(token: str) -> str:
     settings = Settings()
 
     async with httpx.AsyncClient(timeout=10.0) as client:
+        # Step 1: Decode/verify token against Supabase auth to get the user UUID
+        user_resp = await client.get(
+            f"{settings.supabase_url}/auth/v1/user",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "apikey": settings.supabase_service_key,
+            },
+        )
+        if user_resp.status_code != 200:
+            logger.warning("get_profile_id_auth_failed", extra={"status_code": user_resp.status_code})
+            return ""
+        
+        user_id = user_resp.json().get("id", "")
+        if not user_id:
+            logger.warning("get_profile_id_no_uuid")
+            return ""
+
+        # Step 2: Query profiles by user_id UUID
         resp = await client.get(
             f"{settings.supabase_url}/rest/v1/profiles",
-            params={"user_id": f"eq.{token}", "select": "id"},
+            params={"user_id": f"eq.{user_id}", "select": "id"},
             headers={
                 "Authorization": f"Bearer {settings.supabase_service_key}",
                 "apikey": settings.supabase_service_key,
@@ -108,3 +126,4 @@ async def get_profile_id(token: str) -> str:
         if profiles and len(profiles) > 0:
             return profiles[0].get("id", "")
     return ""
+

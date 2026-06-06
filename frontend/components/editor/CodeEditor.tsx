@@ -34,6 +34,25 @@ export function CodeEditor({
   const decorationsRef = useRef<{ clear: () => void } | null>(null);
   const isMountedRef = useRef(true);
   const [isEditorReady, setIsEditorReady] = useState(false);
+  const [activeTheme, setActiveTheme] = useState<'claude-light' | 'claude-dark'>('claude-light');
+
+  // Monitor theme change on body / document
+  useEffect(() => {
+    const checkTheme = () => {
+      const isDark =
+        document.documentElement.classList.contains('dark') ||
+        document.body.classList.contains('dark');
+      setActiveTheme(isDark ? 'claude-dark' : 'claude-light');
+    };
+
+    checkTheme();
+
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+    return () => observer.disconnect();
+  }, []);
 
   // ── Apply annotation markers (squiggles + hover tooltip) ────────
   useEffect(() => {
@@ -95,6 +114,52 @@ export function CodeEditor({
       if (!isMountedRef.current) return;
       editorRef.current = editor;
       monacoRef.current = monaco;
+
+      // Register Claude themes
+      const monacoInstance = monaco as any;
+      if (monacoInstance?.editor?.defineTheme) {
+        monacoInstance.editor.defineTheme('claude-dark', {
+          base: 'vs-dark',
+          inherit: true,
+          rules: [
+            { token: 'comment', foreground: '71717a', fontStyle: 'italic' },
+            { token: 'keyword', foreground: 'fbbf24', fontStyle: 'bold' },
+            { token: 'number', foreground: 'fbbf24' },
+            { token: 'string', foreground: 'a1a1aa' },
+            { token: 'identifier', foreground: 'f4f4f5' },
+            { token: 'type', foreground: 'fbbf24' },
+          ],
+          colors: {
+            'editor.background': '#18181b',
+            'editor.foreground': '#f4f4f5',
+            'editor.lineHighlightBackground': '#222225',
+            'editorLineNumber.foreground': '#71717a',
+            'editorLineNumber.activeForeground': '#fbbf24',
+            'editor.selectionBackground': '#2d1d0c',
+          },
+        });
+        monacoInstance.editor.defineTheme('claude-light', {
+          base: 'vs',
+          inherit: true,
+          rules: [
+            { token: 'comment', foreground: '8a8e94', fontStyle: 'italic' },
+            { token: 'keyword', foreground: 'c2410c', fontStyle: 'bold' },
+            { token: 'number', foreground: 'c2410c' },
+            { token: 'string', foreground: '575760' },
+            { token: 'identifier', foreground: '111115' },
+            { token: 'type', foreground: 'c2410c' },
+          ],
+          colors: {
+            'editor.background': '#ffffff',
+            'editor.foreground': '#111115',
+            'editor.lineHighlightBackground': '#fafaf9',
+            'editorLineNumber.foreground': '#8a8e94',
+            'editorLineNumber.activeForeground': '#c2410c',
+            'editor.selectionBackground': '#fdf4e7',
+          },
+        });
+      }
+
       setIsEditorReady(true);
 
       // Add line click handler
@@ -179,7 +244,7 @@ export function CodeEditor({
       <MonacoEditor
         height={height}
         language="python"
-        theme="vs-dark"
+        theme={activeTheme}
         value={code}
         onChange={value => onChange?.(value ?? '')}
         options={{

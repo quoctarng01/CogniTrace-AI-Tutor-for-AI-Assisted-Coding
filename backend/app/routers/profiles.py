@@ -22,7 +22,10 @@ async def get_profile(authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authentication required")
     
-    token = authorization[7:]
+    # Decode JWT to get user UUID
+    from app.routers.auth import get_current_user
+    user = await get_current_user(authorization)
+    user_id = user.get("id", "")
     
     from app.config import Settings
     settings = Settings()
@@ -30,7 +33,7 @@ async def get_profile(authorization: str = Header(None)):
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{settings.supabase_url}/rest/v1/profiles",
-            params={"user_id": f"eq.{token}", "select": "*"},
+            params={"user_id": f"eq.{user_id}", "select": "*"},
             headers={
                 "Authorization": f"Bearer {settings.supabase_service_key}",
                 "apikey": settings.supabase_service_key,
@@ -82,7 +85,11 @@ async def update_profile(
     
     from app.config import Settings
     settings = Settings()
-    token = authorization[7:]
+    
+    # Decode JWT to get user UUID
+    from app.routers.auth import get_current_user
+    user = await get_current_user(authorization)
+    user_id = user.get("id", "")
     
     # Build update payload
     update_data = {}
@@ -99,7 +106,7 @@ async def update_profile(
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.patch(
             f"{settings.supabase_url}/rest/v1/profiles",
-            params={"user_id": f"eq.{token}"},
+            params={"user_id": f"eq.{user_id}"},
             headers={
                 "Authorization": f"Bearer {settings.supabase_service_key}",
                 "apikey": settings.supabase_service_key,

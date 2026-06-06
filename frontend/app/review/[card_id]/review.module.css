@@ -1,11 +1,11 @@
-/* frontend/app/review/[card_id]/review.module.css */
 .page {
   min-height: 100vh;
-  background: #0d1117;
-  color: #e6edf3;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans), sans-serif;
   display: flex;
   flex-direction: column;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 .loading,
 .errorState {
@@ -15,12 +15,12 @@
   justify-content: center;
   min-height: 100vh;
   gap: 12px;
-  color: #8b949e;
+  color: var(--text-muted);
   font-size: 14px;
 }
 .spinner {
   animation: spin 1s linear infinite;
-  color: #58a6ff;
+  color: var(--accent);
   font-size: 20px;
 }
 @keyframes spin {
@@ -37,17 +37,18 @@
   justify-content: space-between;
   padding: 0 20px;
   height: 56px;
-  border-bottom: 1px solid #21262d;
-  background: #161b22;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 .backLink {
   font-size: 13px;
-  color: #8b949e;
+  color: var(--text-muted);
   text-decoration: none;
   transition: color 0.15s;
 }
 .backLink:hover {
-  color: #e6edf3;
+  color: var(--text);
 }
 .cardInfo {
   display: flex;
@@ -56,20 +57,21 @@
 }
 .conceptTag {
   padding: 4px 12px;
-  background: rgba(88, 166, 255, 0.1);
-  border: 1px solid rgba(88, 166, 255, 0.2);
+  background: var(--accent-bg);
+  border: 1px solid var(--border);
   border-radius: 16px;
   font-size: 13px;
-  font-weight: 600;
-  color: #58a6ff;
+  font-weight: 500;
+  color: var(--accent);
+  font-family: var(--font-mono), monospace;
 }
 
 .replayBadge {
   font-size: 11px;
   padding: 3px 8px;
-  background: #1c1917;
-  color: #fbbf24;
-  border: 1px solid #44403c;
+  background: var(--surface-tertiary);
+  color: var(--warning);
+  border: 1px solid var(--border);
   border-radius: 4px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -79,8 +81,9 @@
 .stepCounter {
   text-align: center;
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-muted);
   margin-bottom: 8px;
+  font-family: var(--font-mono), monospace;
 }
 
 .controlsRow {
@@ -92,17 +95,18 @@
 
 .controlsRow button {
   padding: 8px 16px;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: #e2e8f0;
+  color: var(--text);
   cursor: pointer;
   font-size: 16px;
   transition: all 0.15s ease;
 }
 
 .controlsRow button:hover:not(:disabled) {
-  background: #334155;
+  background: var(--surface-hover);
+  border-color: var(--border-focus);
 }
 
 .controlsRow button:disabled {
@@ -117,7 +121,7 @@
 .editorSection {
   flex: 1;
   overflow: hidden;
-  border-bottom: 1px solid #21262d;
+  border-bottom: 1px solid var(--border);
 }
 .editorLoading,
 .noCode {
@@ -127,27 +131,27 @@
   justify-content: center;
   height: 100%;
   gap: 8px;
-  color: #484f58;
+  color: var(--text-subtle);
   font-size: 13px;
 }
 .hint {
-  color: #30363d;
+  color: var(--border);
 }
 .progressBar {
   height: 3px;
-  background: #21262d;
+  background: var(--border);
   flex-shrink: 0;
 }
 .progressFill {
   height: 100%;
-  background: linear-gradient(90deg, #1f6feb, #388bfd);
+  background: var(--accent);
   transition: width 0.1s linear;
 }
 
 .ratingPanel {
   padding: 32px 24px;
-  background: #161b22;
-  border-top: 1px solid #21262d;
+  background: var(--surface-secondary);
+  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -167,8 +171,9 @@
 .ratingTitle {
   font-size: 16px;
   font-weight: 600;
-  color: #e6edf3;
+  color: var(--text);
   margin: 0;
+  font-family: var(--font-serif), Georgia, serif;
 }
 .ratingButtons {
   display: flex;
@@ -199,42 +204,46 @@
   opacity: 0.7;
 }
 .ratingBtn_again {
-  background: rgba(248, 81, 73, 0.1);
-  border-color: rgba(248, 81, 73, 0.3);
-  color: #f85149;
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger);
 }
 .ratingBtn_again:hover:not(:disabled) {
-  background: rgba(248, 81, 73, 0.2);
+  background: var(--danger-bg);
+  border-color: var(--danger);
 }
 .ratingBtn_hard {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: rgba(245, 158, 11, 0.3);
-  color: #f59e0b;
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+  color: var(--warning);
 }
 .ratingBtn_hard:hover:not(:disabled) {
-  background: rgba(245, 158, 11, 0.2);
+  background: var(--warning-bg);
+  border-color: var(--warning);
 }
 .ratingBtn_good {
-  background: rgba(35, 134, 54, 0.1);
-  border-color: rgba(35, 134, 54, 0.3);
-  color: #3fb950;
+  background: var(--success-bg);
+  border-color: var(--success-border);
+  color: var(--success);
 }
 .ratingBtn_good:hover:not(:disabled) {
-  background: rgba(35, 134, 54, 0.2);
+  background: var(--success-bg);
+  border-color: var(--success);
 }
 .ratingBtn_easy {
-  background: rgba(88, 166, 255, 0.1);
-  border-color: rgba(88, 166, 255, 0.3);
-  color: #58a6ff;
+  background: var(--accent-bg);
+  border-color: var(--border-focus);
+  color: var(--accent);
 }
 .ratingBtn_easy:hover:not(:disabled) {
-  background: rgba(88, 166, 255, 0.2);
+  background: var(--accent-bg);
+  border-color: var(--accent-hover);
 }
 
 .submittedPanel {
   padding: 48px 24px;
-  background: #161b22;
-  border-top: 1px solid #21262d;
+  background: var(--surface-secondary);
+  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -245,45 +254,49 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: rgba(35, 134, 54, 0.15);
-  border: 2px solid #3fb950;
+  background: var(--success-bg);
+  border: 2px solid var(--success);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 24px;
-  color: #3fb950;
+  color: var(--success);
 }
 .submittedTitle {
   font-size: 20px;
-  font-weight: 700;
-  color: #e6edf3;
+  font-weight: 600;
+  color: var(--text);
   margin: 0;
+  font-family: var(--font-serif), Georgia, serif;
 }
 .submittedInfo {
   font-size: 14px;
-  color: #8b949e;
+  color: var(--text-muted);
   margin: 0;
 }
 .dashboardBtn {
   margin-top: 8px;
   padding: 10px 20px;
-  background: #21262d;
-  border: 1px solid #30363d;
-  border-radius: 6px;
-  color: #e6edf3;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
   font-size: 14px;
   font-family: inherit;
   cursor: pointer;
   transition: all 0.15s;
 }
 .dashboardBtn:hover {
-  background: #30363d;
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border-focus);
 }
 .backBtn {
-  color: #58a6ff;
+  color: var(--accent);
   text-decoration: none;
   font-size: 13px;
 }
 .backBtn:hover {
+  color: var(--accent-hover);
   text-decoration: underline;
 }

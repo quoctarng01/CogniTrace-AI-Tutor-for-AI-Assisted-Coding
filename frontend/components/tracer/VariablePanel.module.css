@@ -2,9 +2,10 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #0d1117;
-  border-left: 1px solid #21262d;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
   overflow: hidden;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .header {
@@ -12,24 +13,26 @@
   align-items: center;
   gap: 8px;
   padding: 16px 20px;
-  border-bottom: 1px solid #21262d;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-secondary);
 }
 
 .title {
   font-size: 14px;
   font-weight: 600;
-  color: #e6edf3;
+  color: var(--text);
   margin: 0;
+  font-family: var(--font-serif), Georgia, serif;
 }
 
 .loadingDot {
-  color: #58a6ff;
+  color: var(--accent);
   animation: pulse 1s ease-in-out infinite;
 }
 
 @keyframes pulse {
   0%,
-  100% {
+  100 {
     opacity: 1;
   }
   50% {
@@ -44,13 +47,14 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #484f58;
+  color: var(--text-muted);
   padding: 40px;
   text-align: center;
 }
 
 .empty svg {
-  opacity: 0.4;
+  opacity: 0.5;
+  stroke: var(--text-muted);
 }
 
 .empty p {
@@ -73,36 +77,40 @@
 }
 
 .varList::-webkit-scrollbar-thumb {
-  background: #30363d;
+  background: var(--border);
   border-radius: 3px;
 }
 
 .varItem {
-  padding: 10px 12px;
-  margin-bottom: 4px;
-  border-radius: 6px;
-  background: #161b22;
-  border: 1px solid transparent;
-  transition:
-    border-color 0.2s,
-    background 0.2s;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px var(--shadow-color);
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+}
+
+.varItem:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-focus);
 }
 
 .varItem.changed {
-  border-color: #f97316;
-  background: #1c1510;
-  animation: orangePulse 0.6s ease-out;
+  border-color: var(--warning);
+  background: var(--warning-bg);
+  animation: orangePulse 0.8s ease-out;
 }
 
 @keyframes orangePulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4);
+    box-shadow: 0 0 0 0 rgba(183, 129, 3, 0.4);
   }
   50% {
-    box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.15);
+    box-shadow: 0 0 0 4px rgba(183, 129, 3, 0.15);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+    box-shadow: 0 0 0 0 rgba(183, 129, 3, 0);
   }
 }
 
@@ -110,64 +118,66 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .varName {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: var(--font-mono), monospace;
   font-size: 13px;
-  font-weight: 600;
-  color: #79c0ff;
+  font-weight: 500;
+  color: var(--accent);
 }
 
 .typeBadge {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 9px;
+  font-weight: 500;
   padding: 2px 6px;
   border-radius: 4px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  font-family: var(--font-mono), monospace;
+  background: var(--surface-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
 }
 
 .varValue {
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .valueCode {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-family: var(--font-mono), monospace;
   font-size: 12px;
-  color: #8b949e;
+  color: var(--text);
   word-break: break-all;
   white-space: pre-wrap;
 }
 
 /* Branch decision section */
 .branchSection {
-  border-top: 1px solid #21262d;
-  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  padding: 16px 20px;
+  background: var(--surface-secondary);
 }
 
 .branchTitle {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #484f58;
-  margin: 0 0 8px 0;
-}
-
-.branchInfo {
-  /* container for branch cards */
+  color: var(--text-subtle);
+  margin: 0 0 12px 0;
 }
 
 .branchCard {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 6px;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px var(--shadow-color);
 }
 
 .branchType {
@@ -176,7 +186,7 @@
   gap: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: #e6edf3;
+  color: var(--text);
 }
 
 .branchIcon {
@@ -185,20 +195,20 @@
 }
 
 .branchTakenTrue {
-  color: #3fb950;
+  color: var(--success);
 }
 
 .branchTakenFalse {
-  color: #f85149;
+  color: var(--danger);
 }
 
 .branchIteration {
   font-size: 12px;
-  color: #a371f7;
-  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent);
+  font-family: var(--font-mono), monospace;
 }
 
 .branchLine {
   font-size: 11px;
-  color: #484f58;
+  color: var(--text-muted);
 }

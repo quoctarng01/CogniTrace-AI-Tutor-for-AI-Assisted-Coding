@@ -1,45 +1,96 @@
-"""Side-effect detection for user code validation."""
-import re
+"""Side-effect detection for user code validation using AST parsing."""
+import ast
 
-SIDE_EFFECT_PATTERNS = [
-    (r"\bimport\s+(os|sys|subprocess|requests|urllib|httpx|socket|sqlite3|pickle)", "dangerous_import"),
-    (r"\bopen\s*\(", "file_io"),
-    (r"\brequests\.", "http_requests"),
-    (r"\bos\.", "os_module"),
-    (r"\bsubprocess\.", "subprocess_module"),
-    (r"\beval\s*\(", "eval_usage"),
-    (r"\bexec\s*\(", "exec_usage"),
-    (r"\b__import__\s*\(", "dynamic_import"),
-    (r"\bgetattr\s*\(", "getattr_usage"),
-    (r"\bsetattr\s*\(", "setattr_usage"),
-    (r"\binput\s*\(", "input_usage"),
-]
+BLOCKED_MODULES = {
+    "os", "sys", "subprocess", "requests", "urllib", "httpx", "socket", 
+    "sqlite3", "pickle", "importlib", "shutil", "builtins"
+}
 
-WARNING_PATTERNS = [
-    (r"\bprint\s*\(", "print_statement"),
-]
+BLOCKED_FUNCTIONS = {
+    "eval", "exec", "open", "__import__", "getattr", "setattr", "input", "compile"
+}
+
+BLOCKED_ATTRIBUTES = {
+    "__globals__", "__code__", "__subclasses__", "__builtins__", "__import__"
+}
+
+class SandboxSecurityVisitor(ast.NodeVisitor):
+    def __init__(self):
+        self.blocking = []
+        self.warnings = []
+
+    def visit_Import(self, node):
+        for alias in node.names:
+            base_module = alias.name.split('.')[0]
+            if base_module in BLOCKED_MODULES:
+                self.blocking.append({
+                    "pattern": "dangerous_import",
+                    "matched": f"import {alias.name}"
+                })
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node):
+        if node.module:
+            base_module = node.module.split('.')[0]
+            if base_module in BLOCKED_MODULES:
+                self.blocking.append({
+                    "pattern": "dangerous_import",
+                    "matched": f"from {node.module} import ..."
+                })
+        self.generic_visit(node)
+
+    def visit_Call(self, node):
+        # Detect eval(), exec(), open(), getattr(), setattr(), input(), __import__(), compile()
+        if isinstance(node.func, ast.Name):
+            if node.func.id in BLOCKED_FUNCTIONS:
+                pattern = "file_io" if node.func.id == "open" else "dangerous_builtin"
+                self.blocking.append({
+                    "pattern": pattern,
+                    "matched": f"{node.func.id}()"
+                })
+            # Detect print() statements (warning only)
+            elif node.func.id == "print":
+                self.warnings.append({
+                    "pattern": "print_statement",
+                    "matched": "print()"
+                })
+        self.generic_visit(node)
+
+    def visit_Attribute(self, node):
+        # Detect access to __globals__, __subclasses__, __code__, etc.
+        if node.attr in BLOCKED_ATTRIBUTES:
+            self.blocking.append({
+                "pattern": "dangerous_attribute",
+                "matched": f".{node.attr}"
+            })
+        self.generic_visit(node)
+
+    def visit_Name(self, node):
+        # Detect reference to __builtins__
+        if node.id == "__builtins__":
+            self.blocking.append({
+                "pattern": "dangerous_builtin",
+                "matched": "__builtins__"
+            })
+        self.generic_visit(node)
 
 
 def validate_code(source: str) -> tuple[bool, list[dict], list[dict]]:
     """
-    Check user code for dangerous side effects.
+    Check user code for dangerous side effects using recursive AST parsing.
 
     Returns: (is_valid, blocking_effects, warnings)
     - is_valid: True if code is safe to execute
     - blocking_effects: [] if safe, list of matched dangerous patterns if not
     - warnings: list of warnings (print() is warning only, not blocking)
     """
-    blocking = []
-    warnings = []
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        # Let the compiler/runner handle syntax errors with line numbers
+        return (True, [], [])
 
-    for pattern, name in SIDE_EFFECT_PATTERNS:
-        match = re.search(pattern, source)
-        if match:
-            blocking.append({"pattern": name, "matched": match.group()})
+    visitor = SandboxSecurityVisitor()
+    visitor.visit(tree)
 
-    for pattern, name in WARNING_PATTERNS:
-        match = re.search(pattern, source)
-        if match:
-            warnings.append({"pattern": name, "matched": match.group()})
-
-    return (len(blocking) == 0, blocking, warnings)
+    return (len(visitor.blocking) == 0, visitor.blocking, visitor.warnings)

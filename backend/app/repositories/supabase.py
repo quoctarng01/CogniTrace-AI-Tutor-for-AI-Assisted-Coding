@@ -162,15 +162,30 @@ class SupabaseRepository:
 
     # ── Profile ─────────────────────────────────────────────────────────
     async def get_profile_by_token(self, token: str) -> ProfileResult | None:
+        # Step 1: Decode token to get user UUID
+        user_resp = await self._client.get(
+            f"{self.base_url}/auth/v1/user",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "apikey": self.service_key,
+            },
+        )
+        if user_resp.status_code != 200:
+            return None
+        user_id = user_resp.json().get("id", "")
+        if not user_id:
+            return None
+
+        # Step 2: Retrieve profile by user_id UUID
         rows = await self._get(
             "/rest/v1/profiles",
-            params={"id": f"eq.{token}", "select": "*"},
-            headers=self._user_headers(token),
+            params={"user_id": f"eq.{user_id}", "select": "*"},
+            headers=self._headers(),
         )
         if not rows:
             return None
         p = rows[0]
-        return ProfileResult(id=p["id"], is_pro=p.get("is_pro", False), email=p.get("email"))
+        return ProfileResult(id=p["id"], is_pro=p.get("plan") == "pro", email=p.get("email"))
 
     # ── Traces ─────────────────────────────────────────────────────────
     async def get_user_traces(

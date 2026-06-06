@@ -7,10 +7,10 @@ client = TestClient(app)
 
 
 def test_health_check():
-    """Health endpoint should return ok."""
+    """Health endpoint should return healthy or degraded status depending on service availability."""
     response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    assert response.status_code in (200, 503)
+    assert response.json()["status"] in ("healthy", "degraded")
 
 
 def test_full_trace_flow():

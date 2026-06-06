@@ -1,279 +1,216 @@
-# CodeScope
+# CodeScope — Interactive Python Code Tracer & AI Tutor
 
-> Real-time execution tracer for AI-generated Python code — see exactly what your code does, which branches fire, and why.
-
-[CI](https://github.com/yourusername/codescope/actions/workflows/ci.yml)
-[License: MIT](https://opensource.org/licenses/MIT)
+CodeScope is an educational platform designed to help programming learners understand Python code execution dynamically. By bridging the gap between raw execution states and conceptual understanding, CodeScope performs AST static analysis, dynamic code tracing, and real-time LLM explanation streaming to help users master Python logic.
 
 ---
 
-## What is CodeScope?
+## 🚀 Core Pipeline Architecture
 
-CodeScope solves the **AI code comprehension gap** — the gap between what developers can generate with AI tools (GitHub Copilot, Cursor, Claude Code) and what they actually understand about that code.
+The application processes code input through a robust four-phase execution pipeline:
 
-When you paste AI-generated Python into CodeScope, you get:
+```mermaid
+graph TD
+    A[User Code Input] --> B[Phase 0: AST Static Analysis]
+    B -->|Pre-flight checks| C[Phase 1: Dynamic Execution Tracer]
+    C -->|Generate Trace Events & State| D[Phase 2: LLM Explanation Engine]
+    D -->|Stream Line-by-Line Explanations| E[Phase 3: SM-2 Spaced Repetition Queue]
+```
 
-- **Step-by-step execution** with variable state that updates in real time
-- **Branch detection** — see exactly which `if`/`else` branch fired and which loop iteration you're on
-- **"Why is this here?"** — LLM-powered explanations grounded in the actual execution context
-- **Spaced repetition review** — so understanding doesn't fade after the first "aha!" moment
+### 🔍 Phase 0: AST Static Analysis
+Before executing untrusted code, a lightweight AST parser checks for anti-patterns and potential bugs:
+- **Unhandled None Checks**: Flags potential `NoneType` attribute/subscription access.
+- **Unbounded Recursion**: Detects self-referential functions without clear base cases.
+- **Implicit Collection Mutation**: Identifies loop modifications of dictionary/list containers.
+- **Type Coercion Issues**: Catches operations guaranteed to raise a `TypeError` at runtime.
+
+### ⚙️ Phase 1: Dynamic Execution Tracer
+Spawns an isolated Python subprocess that uses `sys.settrace()` to trace execution step-by-step:
+- Captures line-by-line variable modifications, function calls, returns, exceptions, and stdout.
+- Limits resources (5-second timeout, 500-step execution limit) to prevent CPU starvation or infinite loops.
+- Enforces a sandbox policy that intercepts or blocks hazardous calls (file writes, networking, subprocesses).
+
+### 🧠 Phase 2: LLM Explanation Engine
+Receives execution frames (variables, output, AST context) and streams insights back to the client:
+- Streams tokens in real-time via **Server-Sent Events (SSE)**.
+- Enforces grounded prompt contexts to explain *exactly why* a value changed or why a branch was taken.
+- Integrates a content-addressable caching system to bypass LLM generation for identical trace steps.
+
+### 🗂️ Phase 3: Spaced Repetition Queue
+Implements the **SuperMemo-2 (SM-2)** scheduling algorithm to store and present review cards:
+- Schedules reviews based on user self-ratings (`Again`, `Hard`, `Good`, `Easy`).
+- Automatically updates card metrics (interval, repetition count, easiness factor) on Supabase.
 
 ---
 
-## Quick Start
+## 🛠️ Stack & Technologies
 
-### Run with Docker (recommended)
-
-```bash
-git clone https://github.com/yourusername/codescope.git
-cd codescope
-docker compose up --build
-
-# Open http://localhost:3000
-# API docs: http://localhost:8000/docs
-```
-
-### Run locally
-
-**Backend:**
-
-```bash
-cd backend
-cp .env.example .env
-# Fill in SUPABASE_URL, REDIS_URL in .env
-pip install -e ".[dev]"
-uvicorn app.main:app --reload --port 8000
-```
-
-**Frontend:**
-
-```bash
-cd frontend
-cp .env.local.example .env.local
-npm install
-npm run dev
-# Open http://localhost:3000
-```
+*   **Frontend**: Next.js 15 (App Router), React 19, TypeScript, Lucide, Monaco Editor
+*   **Backend**: FastAPI, AST, Custom Bytecode Tracer Sandbox
+*   **Database & Auth**: Supabase (Postgres & Auth)
+*   **Rate Limiting & Cache**: Redis
+*   **AI Integration**: Three-tier routing: Ollama Cloud (Primary) → Local Ollama → OpenAI/Claude (Fallback)
+*   **Testing**: pytest (Backend), Vitest (Frontend), Playwright (E2E)
 
 ---
 
-## Architecture
+## 🏗️ Key Engineering Decisions
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Frontend (Next.js on Vercel)             │
-│  Monaco Editor │ Variable Panel │ Animation Controls │ SSE   │
-└────────────────────────────┬────────────────────────────────┘
-                             │ HTTPS
-┌────────────────────────────▼────────────────────────────────┐
-│                   Backend (FastAPI on Railway)              │
-│  /api/traces/run → Tracer subprocess                       │
-│  /api/llm/explain/stream → Ollama Cloud → Claude fallback  │
-│  /api/review/* → Spaced repetition (SM-2)                  │
-└────────────────────────────┬────────────────────────────────┘
-                             │
-        ┌────────────────────┼────────────────────┐
-        ▼                    ▼                    ▼
-  ┌──────────┐      ┌──────────────┐    ┌────────────┐
-  │ Supabase │      │ Redis        │    │ Ollama     │
-  │ (Postgres│      │ (Rate limit) │    │ Cloud      │
-  │ + Auth)  │      └──────────────┘    └────────────┘
-  └──────────┘
-```
+### 1. Sandbox Isolation & AST Validation
+To safely run arbitrary Python code, CodeScope couples static pre-flight validation with strict runtime tracing. Static checks reject malicious imports or structures before they run. At runtime, the sandbox restricts disk, network, and system API access using `sys.settrace()` and operating-system limits (`setrlimit`).
 
-### Key Engineering Decisions
+### 2. Bytecode-Level Branch Detection
+Rather than just reporting which line executed, CodeScope inspects CPython opcodes to capture:
+- **Conditional Branching**: Whether an `if`/`else` condition was true or false.
+- **Boolean Short-Circuiting**: Explaining exactly why a compound logical expression (like `and` / `or`) evaluated early.
+- **Loop Progression**: Track iteration indexes of `for` and `while` structures.
 
-**1. Subprocess isolation for code execution**
-
-User code runs as an **isolated Python subprocess** spawned by FastAPI per request. The subprocess:
-
-- Executes with `sys.settrace()` active for bytecode-level instrumentation
-- Is killed after 5 seconds or 500 steps (loop protection)
-- Does **not** share memory with the FastAPI process
-- Has `resource.setrlimit()` applied on Linux for CPU/memory limits
-
-This is fundamentally safer than browser-side execution (Pyodide) and more controllable than a shared interpreter.
-
-**2. Branch detection via bytecode analysis**
-
-Most Python execution tracers show which lines executed. CodeScope goes further — it analyzes CPython bytecode to detect:
-
-- **Conditional branches**: Which `if`/`else` branch fired and why
-- **Loop iterations**: Which iteration of a `for`/`while` loop is running
-- **Boolean short-circuits**: When `and`/`or` short-circuits evaluation
-
-This is the single most impactful feature for understanding AI-generated code, where nested conditionals are often the source of confusion.
-
-```python
-# CodeScope shows:
-# Step 5: if user.get('verified') and not user.get('banned'):
-#   → branch: if (taken=True)
-#   → iteration: 1
-# Step 6: grant_access()
-#   → variables: {user: {...}, verified: True, banned: False}
-```
-
-**3. Three-tier LLM routing with content-addressable caching**
-
-The explanation engine tries LLM providers in order:
-
-1. **Ollama Cloud** (free, no setup) — primary
-2. **Local Ollama** (localhost:11434) — privacy mode
-3. **Claude Sonnet 4** — fallback when others fail
-
-Before any API call, a SHA-256 cache key is computed from `(code[:200] + line_number + line_content[:50])`. Identical requests return instantly from the database at zero cost.
-
-**4. Redis-backed distributed rate limiting**
-
-The rate limiter uses Redis with a Lua script for atomic read-modify-write. This works correctly across all Railway instances — a user cannot bypass the limit by hitting different instances.
+### 3. Distributed Rate Limiting & Three-Tier AI Router
+- **Redis & Lua**: Rate-limits requests across all instances using atomic Lua scripts (default limit is 20/hour for anonymous, unlimited for Pro).
+- **Explanation Cache**: Traces are content-addressed using SHA-256 hashes of `(code + line_number + variables)` to instantly serve cached explanations.
 
 ---
 
-## Project Structure
+## 🗂️ Project Structure
 
 ```
 codescope/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py           # FastAPI entry point + CORS
-│   │   ├── config.py         # All settings from env vars
-│   │   ├── concurrency.py    # asyncio.Semaphore for concurrency
-│   │   ├── routers/          # /api/traces, /llm, /review, /profiles
-│   │   └── services/         # llm_router, rate_limit, tracer_runner
-│   ├── tracer/               # pip-installable bytecode tracer library
-│   │   ├── tracer.py         # sys.settrace() instrumentation + branch detection
-│   │   ├── validator.py      # Side-effect pattern detection
-│   │   └── models.py         # TraceStep dataclasses
-│   ├── migrations/           # Supabase SQL migrations
-│   └── tests/               # pytest + pytest-asyncio
+│   │   ├── main.py           # FastAPI server & CORS policies
+│   │   ├── config.py         # Configuration settings (BaseSettings)
+│   │   ├── routers/          # API Route controllers (/traces, /llm, /review, /profiles)
+│   │   └── services/         # Business logic (rate limiter, LLM router, tracer runner)
+│   ├── tracer/               # Bytecode tracer & instrumentation module
+│   │   ├── tracer.py         # sys.settrace() implementation & branch detection
+│   │   ├── validator.py      # AST static rule enforcement
+│   │   └── models.py         # Trace payload schemas
+│   ├── migrations/           # Supabase DB schema & seed scripts
+│   └── tests/                # pytest unit & integration suite
 ├── frontend/
-│   ├── app/
-│   │   ├── page.tsx          # Landing page
-│   │   ├── tracer/           # Main tracer tool
-│   │   └── dashboard/         # Saved traces + review queue
-│   ├── components/
-│   │   ├── editor/           # Monaco wrapper
-│   │   ├── tracer/           # VariablePanel, AnimationControls
-│   │   ├── llm/              # ExplanationPanel (SSE streaming)
-│   │   └── errors/           # React Error Boundaries
-│   ├── hooks/
-│   │   ├── useTrace.ts       # rAF-based animation loop
-│   │   └── useStreamingExplanation.ts  # SSE with retry
-│   ├── lib/
-│   │   ├── api.ts            # Typed fetch wrappers
-│   │   └── sm2.ts            # SM-2 spaced repetition
-│   └── i18n/                 # English + Vietnamese translations
-├── docker-compose.yml         # Full local dev (Supabase + Redis + FastAPI)
+│   ├── app/                  # Next.js App Router (pages & layouts)
+│   ├── components/           # UI elements (Monaco editor, TraceAnimator, Panels)
+│   ├── hooks/                # Custom React Hooks (useTrace, useStreamingExplanation)
+│   ├── lib/                  # Services and utility helpers (api Client, SM-2 logic)
+│   └── i18n/                 # Localization files (EN/VI translation support)
+├── docker-compose.yml         # Dev environment container orchestrator
 └── README.md
 ```
 
 ---
 
-## Features
+## 🚦 Getting Started
 
-### Core
+### Method A: Quick Start via Docker Compose (Recommended)
 
-- Step-by-step Python execution via `sys.settrace()`
-- Variable state tracking with type badges and change detection
-- Branch decision detection (if/else/for/while)
-- 5-second timeout + 500-step limit
-- Side-effect validation (blocks dangerous patterns before execution)
-- Monaco editor with line highlighting
+Docker Compose boots up the backend, frontend, database, migrations, and caching layers with a single command.
 
-### Animation
-
-- `requestAnimationFrame`-based playback (not `setInterval`)
-- Play/Pause/Step Forward/Step Backward
-- Variable speed (0.5×, 1×, 2×, 5×)
-- Keyboard shortcuts (Space, Arrow keys, Home/End)
-- Tab visibility handling (pauses when tab is hidden)
-- Step-accurate timing regardless of focus state
-
-### LLM Explanations
-
-- Ollama Cloud (free, primary)
-- Local Ollama (localhost:11434, privacy mode)
-- Claude Sonnet 4 (fallback)
-- SSE streaming with token-by-token rendering
-- SHA-256 content-addressable cache
-- Auto-retry with exponential backoff
-- Rate limiting (20/hour anonymous, unlimited Pro)
-
-### Spaced Repetition
-
-- SM-2 algorithm implementation
-- Review queue with streak tracking
-- Rating buttons: Again / Hard / Good / Easy
-
-### Infrastructure
-
-- Docker Compose for local dev (Supabase + Redis + FastAPI)
-- Redis-backed distributed rate limiting (Lua script)
-- React Error Boundaries (per-panel isolation)
-- i18n (English + Vietnamese)
-- Supabase Auth (email/password)
-- Structured logging (structlog)
-- Railway deployment configs
+1. Ensure **Docker** and **Docker Compose** are installed and running.
+2. In the project root, create a `.env` file using the docker settings:
+   ```bash
+   # Add your specific local variables to the .env file in the root
+   POSTGRES_PASSWORD=your_postgres_password
+   SUPABASE_ANON_KEY=your_anon_key
+   SUPABASE_SERVICE_KEY=your_service_role_key
+   ```
+3. Build and launch the stack:
+   ```bash
+   docker compose up --build
+   ```
+4. Access the services:
+   - **Frontend**: http://localhost:3000
+   - **API Docs (Swagger)**: http://localhost:8000/docs
+   - **Supabase Studio**: http://localhost:3001
 
 ---
 
-## Development
+### Method B: Manual Local Setup (Step-by-Step)
 
-### Running Tests
+If you prefer running the components directly on your host machine:
 
+#### 1. Setup Backend
+1. Navigate to the backend directory and activate a virtual environment:
+   ```bash
+   cd backend
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Copy the environment template and populate it:
+   ```bash
+   cp .env.example .env
+   ```
+4. Start the FastAPI application:
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+
+#### 2. Setup Frontend
+1. Navigate to the frontend directory:
+   ```bash
+   cd frontend
+   npm install
+   ```
+2. Copy the environment variables:
+   ```bash
+   cp .env.test.example .env.local
+   ```
+3. Run the Next.js development server:
+   ```bash
+   npm run dev
+   ```
+
+---
+
+## 🔑 Environment Variables Configuration
+
+Copy `backend/.env.example` to `backend/.env`. Essential configurations include:
+
+| Environment Variable | Description | Default / Example |
+| :--- | :--- | :--- |
+| `OLLAMA_CLOUD_URL` | Endpoint for Ollama Cloud (default is primary free explanation provider) | `https://ollama.com/api` |
+| `GITHUB_MODELS_PAT` | Optional token for GitHub Models fallback access | `ghp_your_pat_token` |
+| `SUPABASE_URL` | Supabase endpoint URL for user authentication and state synchronization | `http://localhost:54321` |
+| `SUPABASE_SERVICE_KEY`| Service role key for admin-level database operations | `postgres` |
+| `REDIS_ENABLED` | Toggle distributed rate limiting | `false` |
+| `REDIS_URL` | Connection string to the Redis cache cluster | `redis://localhost:6379` |
+
+---
+
+## 🧪 Testing Suite
+
+CodeScope enforces strict coverage checks across both backend and frontend layers:
+
+### Run Backend Unit & Integration Tests
 ```bash
 cd backend
 pip install -e ".[dev]"
-pytest tests/ -v --cov=tracer --cov=app
-
-cd frontend
-npm install
-npm test
+pytest
 ```
 
-### Running Tracer Tests Directly
-
+### Run Frontend Vitest Tests
 ```bash
-cd backend
-python -c "
-import sys; sys.path.insert(0, 'tracer')
-from tracer.tracer import run_trace
+cd frontend
+npm run test
+```
 
-code = '''
-x = 10
-if x > 5:
-    y = 1
-else:
-    y = 2
-'''
-result = run_trace(code)
-print(f'Steps: {result[\"total_steps\"]}')
-for s in result['steps']:
-    if s['branches_taken']:
-        print(f'  Step {s[\"step_number\"]}: line {s[\"line_number\"]} → {s[\"branches_taken\"]}')
-"
+### Run Playwright End-to-End Tests
+Ensure the full stack is running (using either Docker or local uvicorn + npm dev), then execute:
+```bash
+cd frontend
+npx playwright test
 ```
 
 ---
 
-## API Endpoints
+## 🔒 Security & Sandbox Warning
 
-
-| Method | Endpoint                  | Description                   |
-| ------ | ------------------------- | ----------------------------- |
-| POST   | `/api/traces/run`         | Execute code and return trace |
-| POST   | `/api/traces`             | Save a trace (auth required)  |
-| GET    | `/api/traces`             | List user's traces            |
-| GET    | `/api/llm/explain/stream` | Stream LLM explanation (SSE)  |
-| GET    | `/api/review/due`         | Get due review cards          |
-| POST   | `/api/review/{card_id}`   | Submit review rating          |
-| PATCH  | `/api/profiles/me`        | Update profile settings       |
-
-
-Full API documentation at `/docs` (Swagger UI).
+> [!WARNING]
+> The dynamic execution tracer runs user-submitted Python code. Although locked down via `sys.settrace()`, instruction caps, and sandboxing, **do not host this application on a public-facing server without additional OS-level container isolation** (such as lightweight Docker sandboxes or microVMs like Firecracker).
 
 ---
 
-## License
-
-MIT — see [LICENSE](LICENSE)
+## 📄 License
+Licensed under the [MIT License](LICENSE).

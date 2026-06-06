@@ -3,8 +3,8 @@
   flex-direction: column;
   gap: 12px;
   padding: 16px 20px;
-  background: #0d1117;
-  border-top: 1px solid #21262d;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
 }
 
 .progressContainer {
@@ -16,30 +16,30 @@
 .stepLabel {
   font-size: 12px;
   font-weight: 600;
-  color: #58a6ff;
-  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent);
+  font-family: var(--font-mono), monospace;
   min-width: 90px;
 }
 
 .progressTrack {
   flex: 1;
   height: 4px;
-  background: #21262d;
+  background: var(--border);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .progressFill {
   height: 100%;
-  background: linear-gradient(90deg, #1f6feb, #58a6ff);
+  background: var(--accent);
   border-radius: 2px;
   transition: width 0.15s ease-out;
 }
 
 .durationLabel {
   font-size: 11px;
-  color: #484f58;
-  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  font-family: var(--font-mono), monospace;
   min-width: 40px;
   text-align: right;
 }
@@ -56,23 +56,23 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border: 1px solid #30363d;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #161b22;
-  color: #8b949e;
+  background: var(--surface);
+  color: var(--text-muted);
   font-size: 14px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .iconBtn:hover:not(:disabled) {
-  background: #21262d;
-  color: #e6edf3;
-  border-color: #484f58;
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border-focus);
 }
 
 .iconBtn:active:not(:disabled) {
-  background: #30363d;
+  background: var(--surface-tertiary);
 }
 
 .iconBtn:disabled {
@@ -88,17 +88,17 @@
   height: 48px;
   border: none;
   border-radius: 50%;
-  background: linear-gradient(135deg, #1f6feb, #388bfd);
-  color: white;
+  background: var(--accent);
+  color: var(--btn-text);
   font-size: 18px;
   cursor: pointer;
   transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(31, 111, 235, 0.3);
+  box-shadow: 0 2px 8px var(--shadow-color);
 }
 
 .playBtn:hover {
-  background: linear-gradient(135deg, #388bfd, #58a6ff);
-  box-shadow: 0 4px 16px rgba(31, 111, 235, 0.4);
+  background: var(--accent-hover);
+  box-shadow: 0 4px 16px var(--shadow-color);
   transform: scale(1.05);
 }
 
@@ -107,20 +107,20 @@
 }
 
 .playBtn.playing {
-  background: linear-gradient(135deg, #6e40c9, #8957e5);
-  box-shadow: 0 2px 8px rgba(137, 87, 229, 0.3);
+  background: var(--accent);
+  box-shadow: 0 2px 8px var(--shadow-color);
 }
 
 .playBtn.playing:hover {
-  box-shadow: 0 4px 16px rgba(137, 87, 229, 0.4);
+  box-shadow: 0 4px 16px var(--shadow-color);
 }
 
 .speedSelector {
   display: flex;
   gap: 2px;
   margin-left: auto;
-  background: #161b22;
-  border: 1px solid #30363d;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 3px;
 }
@@ -130,27 +130,27 @@
   border: none;
   border-radius: 5px;
   background: transparent;
-  color: #484f58;
+  color: var(--text-muted);
   font-size: 11px;
   font-weight: 600;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono), monospace;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .speedBtn:hover {
-  color: #8b949e;
-  background: #21262d;
+  color: var(--text);
+  background: var(--surface-hover);
 }
 
 .speedBtn.activeSpeed {
-  background: #1f6feb;
-  color: white;
+  background: var(--accent);
+  color: var(--btn-text);
 }
 
 .stateIndicator {
   text-align: center;
   font-size: 12px;
-  color: #484f58;
+  color: var(--text-muted);
   padding: 4px;
 }

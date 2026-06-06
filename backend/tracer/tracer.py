@@ -72,6 +72,9 @@ def _capture_variables(
     # Walk entire frame chain (fixes closures + comprehension inner frames)
     scope: types.FrameType | None = frame
     while scope is not None:
+        if scope.f_code.co_filename != "<codescope>":
+            scope = scope.f_back
+            continue
         for name in list(scope.f_locals.keys()):
             if name in _INTERNAL_NAMES or _is_internal_variable(name):
                 continue

@@ -165,13 +165,33 @@ async def get_due_reviews(
     user = await get_current_user(authorization)
     user_id = user.get("id", "")
     settings = Settings()
+
+    # Map user UUID (auth.users.id) to profile_id (profiles.id)
+    profile_id = None
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        profile_resp = await client.get(
+            f"{settings.supabase_url}/rest/v1/profiles",
+            params={"user_id": f"eq.{user_id}", "select": "id"},
+            headers={
+                "Authorization": f"Bearer {settings.supabase_service_key}",
+                "apikey": settings.supabase_service_key,
+            },
+        )
+        if profile_resp.status_code == 200:
+            profiles = profile_resp.json()
+            if profiles and len(profiles) > 0:
+                profile_id = profiles[0].get("id")
+
+    if not profile_id:
+        return DueReviewsResponse(cards=[], streak=0, total_due=0)
+
     today = date.today().isoformat()
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{settings.supabase_url}/rest/v1/review_cards",
             params={
-                "user_id": f"eq.{user_id}",
+                "user_id": f"eq.{profile_id}",
                 "next_review_date": f"lte.{today}",
                 "select": "*",
             },
@@ -185,7 +205,7 @@ async def get_due_reviews(
     for card in cards:
         card["due"] = True
 
-    streak = await _calculate_streak(user_id, settings.supabase_url, settings.supabase_service_key)
+    streak = await _calculate_streak(profile_id, settings.supabase_url, settings.supabase_service_key)
     return DueReviewsResponse(cards=cards[:20], streak=streak, total_due=len(cards))
 
 
@@ -205,6 +225,25 @@ async def get_review_card(
     user_id = user.get("id", "")
     settings = Settings()
 
+    # Map user UUID (auth.users.id) to profile_id (profiles.id)
+    profile_id = None
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        profile_resp = await client.get(
+            f"{settings.supabase_url}/rest/v1/profiles",
+            params={"user_id": f"eq.{user_id}", "select": "id"},
+            headers={
+                "Authorization": f"Bearer {settings.supabase_service_key}",
+                "apikey": settings.supabase_service_key,
+            },
+        )
+        if profile_resp.status_code == 200:
+            profiles = profile_resp.json()
+            if profiles and len(profiles) > 0:
+                profile_id = profiles[0].get("id")
+
+    if not profile_id:
+        raise HTTPException(status_code=404, detail="User profile not found")
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         headers = {
             "Authorization": f"Bearer {authorization[7:]}",
@@ -213,7 +252,7 @@ async def get_review_card(
 
         card_resp = await client.get(
             f"{settings.supabase_url}/rest/v1/review_cards",
-            params={"id": f"eq.{card_id}", "user_id": f"eq.{user_id}", "select": "*"},
+            params={"id": f"eq.{card_id}", "user_id": f"eq.{profile_id}", "select": "*"},
             headers=headers,
         )
         cards = card_resp.json() if card_resp.status_code == 200 else []
@@ -274,10 +313,29 @@ async def submit_review(
     user_id = user.get("id", "")
     settings = Settings()
 
+    # Map user UUID (auth.users.id) to profile_id (profiles.id)
+    profile_id = None
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        profile_resp = await client.get(
+            f"{settings.supabase_url}/rest/v1/profiles",
+            params={"user_id": f"eq.{user_id}", "select": "id"},
+            headers={
+                "Authorization": f"Bearer {settings.supabase_service_key}",
+                "apikey": settings.supabase_service_key,
+            },
+        )
+        if profile_resp.status_code == 200:
+            profiles = profile_resp.json()
+            if profiles and len(profiles) > 0:
+                profile_id = profiles[0].get("id")
+
+    if not profile_id:
+        raise HTTPException(status_code=404, detail="User profile not found")
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{settings.supabase_url}/rest/v1/review_cards",
-            params={"id": f"eq.{card_id}", "user_id": f"eq.{user_id}", "select": "*"},
+            params={"id": f"eq.{card_id}", "user_id": f"eq.{profile_id}", "select": "*"},
             headers={
                 "Authorization": f"Bearer {authorization[7:]}",
                 "apikey": settings.supabase_service_key,
