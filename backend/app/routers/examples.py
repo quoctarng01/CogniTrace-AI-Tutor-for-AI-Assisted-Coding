@@ -11,7 +11,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Header, Query, Request
 from pydantic import BaseModel, Field
 
-from app.config import Settings
+from app.config import Settings, settings
 from app.routers.auth import get_current_user, get_profile_id
 
 logger = logging.getLogger("codescope.examples")
@@ -112,7 +112,6 @@ def _parse_annotations(raw) -> list[Annotation]:
 
 async def _fetch_profile(authorization: str, user_id: str) -> dict:
     """Fetch the user's profile from Supabase to check their plan."""
-    settings = Settings()
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{settings.supabase_url}/rest/v1/profiles",
@@ -202,7 +201,6 @@ async def _create_review_card(
     example: ExampleRecord,
 ) -> str:
     """Create a review_card with SM-2 initial values. Returns the card_id."""
-    import json
     intervals = [s.strip() for s in example.review_interval.split(",") if s.strip()]
     first_interval = int(intervals[0]) if intervals else 1
     next_review = (date.today() + timedelta(days=first_interval)).isoformat()
@@ -247,7 +245,6 @@ async def list_examples(
     Public: no authentication required.
     Rate limit: 60 requests/minute per IP.
     """
-    settings = Settings()
 
     # Build main query params (fetches limited rows for display)
     params: dict[str, str] = {
@@ -321,7 +318,6 @@ async def get_example(request: Request, example_id: str):
     Public: no authentication required.
     Rate limit: 60 requests/minute per IP.
     """
-    settings = Settings()
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{settings.supabase_url}/rest/v1/examples",
@@ -371,7 +367,6 @@ async def save_example_to_queue(
 
     user = await get_current_user(authorization)
     user_id = user.get("id", "")
-    settings = Settings()
 
     # ── Pro plan check ─────────────────────────────────────────
     profile = await _fetch_profile(authorization, user_id)

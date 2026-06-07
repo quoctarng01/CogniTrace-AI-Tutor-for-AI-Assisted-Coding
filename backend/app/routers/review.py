@@ -4,7 +4,6 @@ Review router — spaced repetition review endpoints.
 from __future__ import annotations
 
 import json
-import uuid
 import logging
 from datetime import datetime, date, timedelta, timezone
 from typing import Optional
@@ -13,8 +12,9 @@ import httpx
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 
-from app.config import Settings
+from app.config import settings
 from app.routers.auth import get_current_user
+from app.dependencies import get_profile_id_for_user
 
 logger = logging.getLogger("codescope.review")
 
@@ -53,9 +53,16 @@ async def _calculate_streak(user_id: str, supabase_url: str, supabase_key: str) 
         if ts:
             reviewed_dates.add(ts[:10])  # YYYY-MM-DD
     
-    # Count consecutive days from today backwards
+    # Count consecutive days from today backwards (or yesterday if today is not yet reviewed)
     streak = 0
     check_date = date.today()
+    
+    if check_date.isoformat() not in reviewed_dates:
+        yesterday = check_date - timedelta(days=1)
+        if yesterday.isoformat() in reviewed_dates:
+            check_date = yesterday
+        else:
+            return 0
     
     while True:
         date_str = check_date.isoformat()
@@ -164,23 +171,9 @@ async def get_due_reviews(
 
     user = await get_current_user(authorization)
     user_id = user.get("id", "")
-    settings = Settings()
 
     # Map user UUID (auth.users.id) to profile_id (profiles.id)
-    profile_id = None
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        profile_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/profiles",
-            params={"user_id": f"eq.{user_id}", "select": "id"},
-            headers={
-                "Authorization": f"Bearer {settings.supabase_service_key}",
-                "apikey": settings.supabase_service_key,
-            },
-        )
-        if profile_resp.status_code == 200:
-            profiles = profile_resp.json()
-            if profiles and len(profiles) > 0:
-                profile_id = profiles[0].get("id")
+    profile_id = await get_profile_id_for_user(user_id)
 
     if not profile_id:
         return DueReviewsResponse(cards=[], streak=0, total_due=0)
@@ -223,23 +216,9 @@ async def get_review_card(
 
     user = await get_current_user(authorization)
     user_id = user.get("id", "")
-    settings = Settings()
 
     # Map user UUID (auth.users.id) to profile_id (profiles.id)
-    profile_id = None
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        profile_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/profiles",
-            params={"user_id": f"eq.{user_id}", "select": "id"},
-            headers={
-                "Authorization": f"Bearer {settings.supabase_service_key}",
-                "apikey": settings.supabase_service_key,
-            },
-        )
-        if profile_resp.status_code == 200:
-            profiles = profile_resp.json()
-            if profiles and len(profiles) > 0:
-                profile_id = profiles[0].get("id")
+    profile_id = await get_profile_id_for_user(user_id)
 
     if not profile_id:
         raise HTTPException(status_code=404, detail="User profile not found")
@@ -311,23 +290,9 @@ async def submit_review(
 
     user = await get_current_user(authorization)
     user_id = user.get("id", "")
-    settings = Settings()
 
     # Map user UUID (auth.users.id) to profile_id (profiles.id)
-    profile_id = None
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        profile_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/profiles",
-            params={"user_id": f"eq.{user_id}", "select": "id"},
-            headers={
-                "Authorization": f"Bearer {settings.supabase_service_key}",
-                "apikey": settings.supabase_service_key,
-            },
-        )
-        if profile_resp.status_code == 200:
-            profiles = profile_resp.json()
-            if profiles and len(profiles) > 0:
-                profile_id = profiles[0].get("id")
+    profile_id = await get_profile_id_for_user(user_id)
 
     if not profile_id:
         raise HTTPException(status_code=404, detail="User profile not found")
@@ -381,3 +346,60 @@ async def submit_review(
         "new_repetitions": new_reps,
         "next_review_date": next_date.isoformat(),
     }
+
+
+class GradeRequest(BaseModel):
+    card_id: str
+    user_answer: str
+
+
+@router.post("/grade")
+async def grade_review_card(
+    req: GradeRequest,
+    authorization: str = Header(None),
+):
+    """Grade a user's typed explanation for active recall review."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    user = await get_current_user(authorization)
+    user_id = user.get("id", "")
+    profile_id = await get_profile_id_for_user(user_id)
+    if not profile_id:
+        raise HTTPException(status_code=404, detail="User profile not found")
+
+    # Fetch card and trace details from Supabase
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        headers = {
+            "Authorization": f"Bearer {authorization[7:]}",
+            "apikey": settings.supabase_service_key,
+        }
+        card_resp = await client.get(
+            f"{settings.supabase_url}/rest/v1/review_cards",
+            params={"id": f"eq.{req.card_id}", "user_id": f"eq.{profile_id}", "select": "*"},
+            headers=headers,
+        )
+        cards = card_resp.json() if card_resp.status_code == 200 else []
+        if not cards:
+            raise HTTPException(status_code=404, detail="Card not found")
+        card = cards[0]
+
+        trace_resp = await client.get(
+            f"{settings.supabase_url}/rest/v1/traces",
+            params={"id": f"eq.{card['trace_id']}", "select": "*"},
+            headers=headers,
+        )
+        trace_data = trace_resp.json()[0] if trace_resp.status_code == 200 and trace_resp.json() else {}
+
+    code = trace_data.get("code", "")
+    steps = trace_data.get("steps", "[]")
+    
+    if not isinstance(steps, str):
+        steps_json = json.dumps(steps)
+    else:
+        steps_json = steps
+
+    # Grade user answer via LLM
+    from app.services.llm_router import llm_router
+    result = await llm_router.grade_explanation(code, steps_json, req.user_answer)
+    return result

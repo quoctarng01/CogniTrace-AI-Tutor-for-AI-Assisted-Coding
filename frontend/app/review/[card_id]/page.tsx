@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { getSupabase } from '@/lib/supabase';
-import { fetchReviewCard, submitReviewRating } from '@/lib/api';
+import { fetchReviewCard, submitReviewRating, gradeReviewExplanation, type GradeReviewResponse } from '@/lib/api';
 import { formatNextReview } from '@/lib/sm2';
 import type { ReviewCardDetail } from '@/types/user';
 import { useTrace } from '@/hooks/useTrace';
@@ -18,7 +18,7 @@ const CodeEditor = dynamic(() => import('@/components/editor/CodeEditor').then(m
   loading: () => <div className={styles.editorLoading}>Loading code...</div>,
 });
 
-type ReviewState = 'loading' | 'playing' | 'rating' | 'submitting' | 'submitted' | 'error';
+type ReviewState = 'loading' | 'playing' | 'active_recall' | 'grading' | 'rating' | 'submitting' | 'submitted' | 'error';
 
 const RATING_CONFIG: Record<'again' | 'hard' | 'good' | 'easy', { label: string; hint: string }> = {
   again: { label: 'Again', hint: 'Forgot it' },
@@ -38,6 +38,10 @@ export default function ReviewPage() {
   const [nextReview, setNextReview] = useState<string | null>(null);
   const [nextInterval, setNextInterval] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [activeRecallText, setActiveRecallText] = useState('');
+  const [gradingResult, setGradingResult] = useState<GradeReviewResponse | null>(null);
+  const [isGrading, setIsGrading] = useState(false);
 
   const cardRef = useRef<ReviewCardDetail | null>(null);
 
@@ -102,12 +106,39 @@ export default function ReviewPage() {
     load();
   }, [cardId, router]);
 
-  // Transition from playing → rating when playback ends
+  // Transition from playing → active_recall when playback ends
   useEffect(() => {
     if (playbackState === 'ended' && reviewState === 'playing') {
-      setReviewState('rating');
+      setReviewState('active_recall');
     }
   }, [playbackState, reviewState]);
+
+  const handleGrade = useCallback(async () => {
+    if (!activeRecallText.trim()) return;
+    setIsGrading(true);
+    setReviewState('grading');
+    setError(null);
+    trackEvent('review_grading_started', { card_id: cardId });
+    try {
+      const result = await gradeReviewExplanation(cardId, activeRecallText);
+      setGradingResult(result);
+      setReviewState('rating');
+      trackEvent('review_grading_completed', {
+        card_id: cardId,
+        score: result.score,
+        rating_suggestion: result.rating_suggestion,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Grading failed');
+      setReviewState('active_recall');
+      trackEvent('review_grading_failed', {
+        card_id: cardId,
+        error: err instanceof Error ? err.message : 'Grading failed',
+      });
+    } finally {
+      setIsGrading(false);
+    }
+  }, [cardId, activeRecallText]);
 
   const handleRating = useCallback(
     async (r: 'again' | 'hard' | 'good' | 'easy') => {
@@ -230,26 +261,76 @@ export default function ReviewPage() {
           </>
         )}
 
+        {/* Active Recall textbox */}
+        {reviewState === 'active_recall' && (
+          <div className={styles.activeRecallPanel}>
+            <h2 className={styles.ratingTitle}>Active Recall Challenge</h2>
+            <p className={styles.recallLabel}>
+              Explain step-by-step how this code executed and why variables updated the way they did.
+            </p>
+            <textarea
+              className={styles.recallTextarea}
+              placeholder="Type your explanation here... (e.g., n started at 8, we looped until it was 1...)"
+              value={activeRecallText}
+              onChange={(e) => setActiveRecallText(e.target.value)}
+            />
+            <button
+              onClick={handleGrade}
+              disabled={!activeRecallText.trim()}
+              className={styles.submitExplanationBtn}
+            >
+              Submit to AI Tutor
+            </button>
+          </div>
+        )}
+
+        {/* Grading state */}
+        {reviewState === 'grading' && (
+          <div className={styles.gradingPanel}>
+            <div className={styles.loading}>
+              <span className={styles.spinner}>◈</span> Grading your answer via AI Tutor...
+            </div>
+          </div>
+        )}
+
         {/* Rating buttons */}
         {(reviewState === 'rating' || reviewState === 'submitting') && (
           <div className={styles.ratingPanel}>
+            {gradingResult && (
+              <div className={styles.feedbackSection}>
+                <div className={styles.feedbackHeader}>
+                  <span className={styles.feedbackTitle}>AI Tutor Assessment</span>
+                  <span className={styles.scoreBadge}>Score: {gradingResult.score}%</span>
+                </div>
+                <div className={styles.feedbackText}>{gradingResult.feedback}</div>
+                <div className={styles.suggestionText}>
+                  Suggested Rating: <strong>{RATING_CONFIG[gradingResult.rating_suggestion].label}</strong>
+                </div>
+              </div>
+            )}
+            
             <h2 className={styles.ratingTitle}>
               {reviewState === 'submitting'
                 ? 'Submitting...'
-                : 'How well did you understand this?'}
+                : 'Confirm how well you understood this:'}
             </h2>
             <div className={styles.ratingButtons}>
-              {(['again', 'hard', 'good', 'easy'] as const).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => handleRating(r)}
-                  disabled={reviewState === 'submitting' || rating !== null}
-                  className={`${styles.ratingBtn} ${styles[`ratingBtn_${r}`]}`}
-                >
-                  <span className={styles.ratingLabel}>{RATING_CONFIG[r].label}</span>
-                  <span className={styles.ratingHint}>{RATING_CONFIG[r].hint}</span>
-                </button>
-              ))}
+              {(['again', 'hard', 'good', 'easy'] as const).map((r) => {
+                const isSuggested = gradingResult?.rating_suggestion === r;
+                return (
+                  <button
+                    key={r}
+                    onClick={() => handleRating(r)}
+                    disabled={reviewState === 'submitting' || rating !== null}
+                    className={`${styles.ratingBtn} ${styles[`ratingBtn_${r}`]} ${
+                      isSuggested ? styles.ratingBtn_suggested : ''
+                    }`}
+                  >
+                    <span className={styles.ratingLabel}>{RATING_CONFIG[r].label}</span>
+                    <span className={styles.ratingHint}>{RATING_CONFIG[r].hint}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

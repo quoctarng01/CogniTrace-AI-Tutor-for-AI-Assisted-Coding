@@ -8,13 +8,13 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Header
-from fastapi.responses import Response
+from fastapi import APIRouter, HTTPException, Query, Header, Request
 from sse_starlette.sse import EventSourceResponse
 
 from app.services.llm_router import llm_router, LLMProvider
-from app.services.rate_limit import check_rate_limit, RateLimitResult
+from app.services.rate_limit import check_rate_limit
 from app.config import settings
+from app.dependencies import is_pro_user
 
 logger = logging.getLogger("codescope.llm")
 
@@ -23,10 +23,13 @@ router = APIRouter()
 
 @router.get("/explain/stream")
 async def stream_explanation(
+    request: Request,
     code: str = Query(..., max_length=5000),
     line_number: int = Query(..., ge=1),
     line_content: str = Query(..., max_length=500),
     locals_json: str = Query(..., max_length=2000),
+    ollama_endpoint: Optional[str] = Query(default=None, description="Optional Ollama endpoint override"),
+    token: Optional[str] = Query(default=None, description="Optional JWT token override for SSE"),
     authorization: Optional[str] = Header(None),
 ):
     """
@@ -52,17 +55,23 @@ async def stream_explanation(
             detail={"error": "INVALID_JSON", "message": "locals_json must be valid JSON"},
         )
     
-    # 2. Extract user_id ONLY from auth header — never from query params
+    # 2. Extract user_id from token query parameter or auth header
     user_id = None
-    if authorization:
+    jwt_token = token
+    if not jwt_token and authorization and authorization.startswith("Bearer "):
+        jwt_token = authorization[7:]
+    
+    if jwt_token:
         from app.routers.auth import get_profile_id
-        token = authorization.replace("Bearer ", "")
-        user_id = await get_profile_id(token)
+        user_id = await get_profile_id(jwt_token)
     
     # 3. Rate limit check (only for anonymous/unauthenticated users)
     # Authenticated Pro users bypass rate limiting
-    if not user_id or not await _is_pro_user(user_id):
-        rate_key = authorization.split(" ")[-1] if authorization else "anonymous"
+    if not user_id or not await is_pro_user(user_id):
+        # Use client IP for anonymous users so they have separate rate limit buckets.
+        # For authenticated users, use the token suffix as key.
+        client_ip = request.client.host if request.client else "unknown"
+        rate_key = jwt_token[-32:] if jwt_token else client_ip
         result = await check_rate_limit(rate_key)
         
         if not result.allowed:
@@ -129,27 +138,3 @@ async def stream_explanation(
     
     return EventSourceResponse(event_generator())
 
-
-async def _is_pro_user(user_id: str | None) -> bool:
-    """Check if user is on Pro plan by querying Supabase profiles table."""
-    if not user_id:
-        return False
-
-    from app.config import settings
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(
-                f"{settings.supabase_url}/rest/v1/profiles",
-                params={"user_id": f"eq.{user_id}", "select": "plan"},
-                headers={
-                    "Authorization": f"Bearer {settings.supabase_service_key}",
-                    "apikey": settings.supabase_service_key,
-                },
-            )
-            if resp.status_code == 200:
-                profiles = resp.json()
-                if profiles and len(profiles) > 0:
-                    return profiles[0].get("plan") == "pro"
-    except Exception:
-        pass
-    return False

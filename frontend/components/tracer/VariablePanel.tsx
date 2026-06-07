@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import type { TraceStep } from '@/types/trace';
 import { getTypeColor } from '@/types/trace';
 import styles from './VariablePanel.module.css';
+import { MemoryVisualizer } from './MemoryVisualizer';
 
 interface VariablePanelProps {
   variables: Record<string, { type: string; value: string; changed: boolean }>;
@@ -69,7 +70,7 @@ export function VariablePanel({ variables, branches, isLoading }: VariablePanelP
                 </span>
               </div>
               <div className={styles.varValue}>
-                <code className={styles.valueCode}>{info.value}</code>
+                <MemoryVisualizer type={info.type} value={info.value} name={name} />
               </div>
             </div>
           ))}
@@ -80,7 +81,14 @@ export function VariablePanel({ variables, branches, isLoading }: VariablePanelP
       {branches && Object.keys(branches).length > 0 && (
         <div className={styles.branchSection}>
           <h4 className={styles.branchTitle}>Branch Decision</h4>
-          <div className={styles.branchInfo}>{renderBranch(branches)}</div>
+          {Object.entries(branches).map(([branchType, branchData]) => (
+            <div key={branchType} className={styles.branchInfo}>
+              {renderBranch({
+                type: branchType,
+                ...(branchData as Record<string, unknown>),
+              })}
+            </div>
+          ))}
         </div>
       )}
     </div>

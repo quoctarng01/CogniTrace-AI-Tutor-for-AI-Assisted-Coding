@@ -1,5 +1,4 @@
 """Unit tests for debug disk write — FIX-CR-05."""
-import pytest
 import inspect
 
 
@@ -35,7 +34,7 @@ def test_traces_router_no_disk_write():
                 break
 
     assert len(violations) == 0, (
-        f"CRITICAL-05: Found disk-write patterns in traces.py:\n"
+        "CRITICAL-05: Found disk-write patterns in traces.py:\n"
         + "\n".join(violations)
         + "\nReplace write_debug_log with structured logging (logger.debug/info/warning)."
     )
@@ -60,7 +59,7 @@ def test_auth_router_no_disk_write():
             violations.append(f"Line {i}: {stripped}")
 
     assert len(violations) == 0, (
-        f"CRITICAL-05: Found disk-write patterns in auth.py:\n"
+        "CRITICAL-05: Found disk-write patterns in auth.py:\n"
         + "\n".join(violations)
         + "\nReplace write_debug_log with structured logging."
     )

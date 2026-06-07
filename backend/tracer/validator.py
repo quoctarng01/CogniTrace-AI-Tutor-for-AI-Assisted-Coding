@@ -3,11 +3,27 @@ import ast
 
 BLOCKED_MODULES = {
     "os", "sys", "subprocess", "requests", "urllib", "httpx", "socket", 
-    "sqlite3", "pickle", "importlib", "shutil", "builtins"
+    "sqlite3", "pickle", "importlib", "shutil", "builtins",
+    # Additional dangerous modules
+    "ctypes",           # Direct memory access and C library calls
+    "multiprocessing",  # Spawns child processes
+    "threading",        # Creates threads that outlive the tracer
+    "signal",           # Sends OS signals
+    "mmap",             # Maps files/memory directly
+    "resource",         # Can call setrlimit to remove resource limits
+    "gc",               # gc.get_referrers() can expose internal objects
+    "pty",              # Pseudo-terminal (Unix only, harmless on Windows but block anyway)
 }
 
 BLOCKED_FUNCTIONS = {
-    "eval", "exec", "open", "__import__", "getattr", "setattr", "input", "compile"
+    "eval", "exec", "open", "__import__", "getattr", "setattr", "input", "compile",
+    # Additional dangerous builtins
+    "breakpoint",   # Drops into the Python debugger (pdb)
+    "vars",         # Exposes the local namespace as a mutable dict
+    "globals",      # Exposes the global namespace
+    "locals",       # Exposes the local namespace
+    "memoryview",   # Low-level memory buffer access
+    "dir",          # Enables runtime discovery of attribute names (blocklist bypass)
 }
 
 BLOCKED_ATTRIBUTES = {

@@ -111,6 +111,23 @@
   cursor: not-allowed;
 }
 
+.outlineToggleBtn {
+  padding: 8px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.outlineToggleBtn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border-focus);
+}
+
 .traceBtn {
   padding: 8px 20px;
   border: 1px solid transparent;
@@ -302,6 +319,57 @@
 .shareBtn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* Compare Mode layouts */
+.compareGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.compareCol {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.compareColHeader {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 10px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exitCompareBtn {
+  padding: 8px 16px;
+  background: var(--surface);
+  color: var(--danger);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exitCompareBtn:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-focus);
 }
 
 /* Modal overlay */

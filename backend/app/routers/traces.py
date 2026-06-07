@@ -1,19 +1,19 @@
 """Trace execution API endpoints."""
-from fastapi import APIRouter, HTTPException, Header, Depends, Request
+import ast
+from fastapi import APIRouter, HTTPException, Header, Request
 from pydantic import BaseModel, Field
-from typing import Optional
 import httpx
 import secrets
-import json
 import logging
 import bcrypt
 
 from datetime import date, datetime
 from tracer.validator import validate_code
 from tracer.runner import run_trace as run_trace_subprocess
-from app.config import Settings
+from app.config import settings
 from app.routers.auth import get_current_user
 from app.routers.review import _calculate_streak
+from app.dependencies import get_profile_id_for_user, is_pro_user
 
 logger = logging.getLogger("codescope.traces")
 
@@ -28,33 +28,6 @@ except ImportError:
 
 
 # ── Helper Functions ────────────────────────────────────────────────
-
-async def _is_pro_user_in_traces(user_id: str | None) -> bool:
-    """
-    Check if user is on Pro plan.
-    INLINED here to avoid circular import with llm.py.
-    Must stay in sync with _is_pro_user in app/routers/llm.py.
-    """
-    if not user_id:
-        return False
-    settings = Settings()
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(
-                f"{settings.supabase_url}/rest/v1/profiles",
-                params={"user_id": f"eq.{user_id}", "select": "plan"},
-                headers={
-                    "Authorization": f"Bearer {settings.supabase_service_key}",
-                    "apikey": settings.supabase_service_key,
-                },
-            )
-            if resp.status_code == 200:
-                profiles = resp.json()
-                if profiles and len(profiles) > 0:
-                    return profiles[0].get("plan") == "pro"
-    except Exception:
-        pass
-    return False
 
 
 async def _get_trace_count_this_month(user_id: str, settings_obj) -> int:
@@ -152,12 +125,11 @@ async def run_trace(req: TraceRequest, authorization: str = Header(None), reques
         user_id = user.get("id", "")
         
         # Check if user is Pro
-        is_pro = await _is_pro_user_in_traces(user_id)
+        is_pro = await is_pro_user(user_id)
         
         if not is_pro:
             # Count user's traces this month
             FREE_TRACE_LIMIT = 50
-            settings = Settings()
             trace_count = await _get_trace_count_this_month(user_id, settings)
             
             if trace_count >= FREE_TRACE_LIMIT:
@@ -191,8 +163,8 @@ async def run_trace(req: TraceRequest, authorization: str = Header(None), reques
         initial_ns = {}
         for name, val_str in req.initial_namespace.items():
             try:
-                initial_ns[name] = eval(val_str, {"__builtins__": {"True": True, "False": False, "None": None}})
-            except Exception:
+                initial_ns[name] = ast.literal_eval(val_str)
+            except (ValueError, SyntaxError):
                 pass  # Skip invalid values
 
     # Step 3: Run the tracer in a subprocess
@@ -260,23 +232,9 @@ async def get_dashboard(authorization: str = Header(None)):
 
     user = await get_current_user(authorization)
     user_id = user.get("id", "")
-    settings = Settings()
 
     # Map user UUID (auth.users.id) to profile_id (profiles.id)
-    profile_id = None
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        profile_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/profiles",
-            params={"user_id": f"eq.{user_id}", "select": "id"},
-            headers={
-                "Authorization": f"Bearer {settings.supabase_service_key}",
-                "apikey": settings.supabase_service_key,
-            },
-        )
-        if profile_resp.status_code == 200:
-            profiles = profile_resp.json()
-            if profiles and len(profiles) > 0:
-                profile_id = profiles[0].get("id")
+    profile_id = await get_profile_id_for_user(user_id)
 
     if not profile_id:
         return DashboardResponse(
@@ -299,6 +257,21 @@ async def get_dashboard(authorization: str = Header(None)):
         )
         traces = traces_resp.json() if traces_resp.status_code == 200 else []
 
+        # Fetch true total count (separate query, no limit)
+        count_resp = await client.get(
+            f"{settings.supabase_url}/rest/v1/traces",
+            params={"user_id": f"eq.{profile_id}", "select": "id"},
+            headers={**headers, "Prefer": "count=exact"},
+        )
+        total_traces_count = len(traces)  # default to page count
+        if count_resp.status_code == 200:
+            content_range = count_resp.headers.get("content-range", "")
+            if "/" in content_range:
+                try:
+                    total_traces_count = int(content_range.split("/")[-1])
+                except ValueError:
+                    pass
+
         today = date.today().isoformat()
         cards_resp = await client.get(
             f"{settings.supabase_url}/rest/v1/review_cards",
@@ -314,7 +287,7 @@ async def get_dashboard(authorization: str = Header(None)):
         traces=traces,
         due_cards=[{**c, "due": True} for c in due_cards],
         streak=streak,
-        total_traces=len(traces),
+        total_traces=total_traces_count,
     )
 
 
@@ -375,23 +348,8 @@ async def save_trace(
             "matched": [e["pattern"] for e in blocking],
         })
 
-    settings = Settings()
-
     # Look up profiles.id where profiles.user_id = user_id (auth UUID)
-    profile_id = None
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        profile_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/profiles",
-            params={"user_id": f"eq.{user_id}", "select": "id"},
-            headers={
-                "Authorization": f"Bearer {settings.supabase_service_key}",
-                "apikey": settings.supabase_service_key,
-            },
-        )
-        if profile_resp.status_code == 200:
-            profiles = profile_resp.json()
-            if profiles and len(profiles) > 0:
-                profile_id = profiles[0].get("id")
+    profile_id = await get_profile_id_for_user(user_id)
 
     if not profile_id:
         raise HTTPException(status_code=404, detail="User profile not found")
@@ -459,23 +417,8 @@ async def list_traces(
         logger.warning("list_traces_auth_failed", extra={"detail": str(e.detail)})
         raise
 
-    settings = Settings()
-    
     # Map user UUID (auth.users.id) to profile_id (profiles.id)
-    profile_id = None
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        profile_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/profiles",
-            params={"user_id": f"eq.{user_id}", "select": "id"},
-            headers={
-                "Authorization": f"Bearer {settings.supabase_service_key}",
-                "apikey": settings.supabase_service_key,
-            },
-        )
-        if profile_resp.status_code == 200:
-            profiles = profile_resp.json()
-            if profiles and len(profiles) > 0:
-                profile_id = profiles[0].get("id")
+    profile_id = await get_profile_id_for_user(user_id)
 
     if not profile_id:
         return {"traces": [], "total_traces": 0}
@@ -483,6 +426,7 @@ async def list_traces(
     logger.debug("list_traces_settings_loaded", extra={"supabase_url": settings.supabase_url})
     
     async with httpx.AsyncClient(timeout=10.0) as client:
+        # Fetch the page of traces
         resp = await client.get(
             f"{settings.supabase_url}/rest/v1/traces",
             params={
@@ -499,9 +443,31 @@ async def list_traces(
         )
         logger.info("list_traces_response", extra={"status_code": resp.status_code})
 
+        # Fetch the true total count (no limit, ask Supabase for exact count)
+        count_resp = await client.get(
+            f"{settings.supabase_url}/rest/v1/traces",
+            params={"user_id": f"eq.{profile_id}", "select": "id"},
+            headers={
+                "Authorization": f"Bearer {authorization[7:]}",
+                "apikey": settings.supabase_service_key,
+                "Prefer": "count=exact",
+            },
+        )
+
     traces = resp.json() if resp.status_code == 200 else []
-    logger.info("list_traces_returning", extra={"trace_count": len(traces)})
-    return {"traces": traces, "total_traces": len(traces)}
+
+    # Parse true total from the Content-Range header (e.g. "0-19/347")
+    total_traces_count = len(traces)  # safe fallback
+    if count_resp.status_code == 200:
+        content_range = count_resp.headers.get("content-range", "")
+        if "/" in content_range:
+            try:
+                total_traces_count = int(content_range.split("/")[-1])
+            except ValueError:
+                pass
+
+    logger.info("list_traces_returning", extra={"trace_count": len(traces), "total": total_traces_count})
+    return {"traces": traces, "total_traces": total_traces_count}
 
 
 @router.get("/traces/shared/{share_token}")
@@ -524,8 +490,6 @@ async def get_shared_trace(
     if authorization:
         token = authorization.replace("Bearer ", "")
         owner_id = await get_profile_id(token)
-
-    settings = Settings()
 
     if owner_id:
         params = {
@@ -597,25 +561,11 @@ async def fork_shared_trace(
     if not authorization:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    settings = Settings()
     user = await get_current_user(authorization)
     user_id = user.get("id", "")
 
     # Map user UUID (auth.users.id) to profile_id (profiles.id)
-    profile_id = None
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        profile_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/profiles",
-            params={"user_id": f"eq.{user_id}", "select": "id"},
-            headers={
-                "Authorization": f"Bearer {settings.supabase_service_key}",
-                "apikey": settings.supabase_service_key,
-            },
-        )
-        if profile_resp.status_code == 200:
-            profiles = profile_resp.json()
-            if profiles and len(profiles) > 0:
-                profile_id = profiles[0].get("id")
+    profile_id = await get_profile_id_for_user(user_id)
 
     if not profile_id:
         raise HTTPException(status_code=404, detail="User profile not found")
@@ -695,7 +645,6 @@ async def share_trace(
     if not authorization:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    settings = Settings()
     share_token = secrets.token_hex(16)
 
     # Build update payload
@@ -725,19 +674,7 @@ async def share_trace(
         user_id = user.get("id", "")
 
         # Map user UUID (auth.users.id) to profile_id (profiles.id)
-        profile_id = None
-        profile_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/profiles",
-            params={"user_id": f"eq.{user_id}", "select": "id"},
-            headers={
-                "Authorization": f"Bearer {settings.supabase_service_key}",
-                "apikey": settings.supabase_service_key,
-            },
-        )
-        if profile_resp.status_code == 200:
-            profiles = profile_resp.json()
-            if profiles and len(profiles) > 0:
-                profile_id = profiles[0].get("id")
+        profile_id = await get_profile_id_for_user(user_id)
 
         if not profile_id:
             raise HTTPException(status_code=404, detail="User profile not found")

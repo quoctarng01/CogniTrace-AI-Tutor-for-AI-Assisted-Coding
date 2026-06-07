@@ -69,3 +69,36 @@ async def test_calculate_streak_gap_resets():
         assert streak == 1, (
             f"HI-02: gap should reset streak to 1, got {streak}"
         )
+
+
+@pytest.mark.asyncio
+async def test_calculate_streak_yesterday_preserves_streak():
+    """If yesterday is reviewed but today is not yet, the streak should be preserved."""
+    from app.routers.review import _calculate_streak
+    
+    today = date.today()
+    yesterday = (today - timedelta(days=1)).isoformat()
+    two_days_ago = (today - timedelta(days=2)).isoformat()
+    
+    # Yesterday and two days ago reviewed, but not today
+    mock_cards = [
+        {"last_reviewed_at": yesterday},
+        {"last_reviewed_at": two_days_ago},
+    ]
+    
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json = MagicMock(return_value=mock_cards)
+    
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    
+    with patch('app.routers.review.httpx.AsyncClient', return_value=mock_client):
+        streak = await _calculate_streak("user-123", "https://test.supabase.co", "key")
+        
+        assert streak == 2, (
+            f"Expected streak to be preserved as 2, got {streak}"
+        )
+

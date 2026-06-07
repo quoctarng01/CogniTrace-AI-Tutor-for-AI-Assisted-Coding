@@ -1,5 +1,4 @@
 """Unit tests for LLM providers — FIX-HI-04."""
-import pytest
 
 
 def test_ollama_cloud_is_primary_provider():

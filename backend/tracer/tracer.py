@@ -61,6 +61,16 @@ def _build_opcode_map(code: types.CodeType) -> dict[int, str]:
     return {instr.offset: instr.opname for instr in dis.get_instructions(code)}
 
 
+def _get_call_depth(frame) -> int:
+    depth = 0
+    f = frame
+    while f:
+        if f.f_code.co_filename == "<codescope>":
+            depth += 1
+        f = f.f_back
+    return max(1, depth)
+
+
 def _capture_variables(
     frame: types.FrameType,
     prev_variables: dict[str, str],
@@ -163,9 +173,9 @@ def run_trace(
     if initial_namespace:
         for name, raw_val in initial_namespace.items():
             try:
-                val = eval(repr(raw_val), {"__builtins__": {"True": True, "False": False, "None": None}})
+                val = ast.literal_eval(repr(raw_val))
                 namespace[name] = val
-            except Exception:
+            except (ValueError, SyntaxError):
                 pass  # Silently skip invalid initial values
 
     start_time = time.perf_counter()
@@ -173,6 +183,10 @@ def run_trace(
 
     def tracer_callback(frame, event, arg):
         nonlocal prev_variables
+
+        # Only trace code in user space (<codescope>)
+        if frame.f_code.co_filename != "<codescope>":
+            return None if event == "return" else tracer_callback
 
         if len(steps) >= max_steps:
             nonlocal max_steps_reached
@@ -186,8 +200,6 @@ def run_trace(
             line_no = frame.f_lineno
 
             variables = _capture_variables(frame, prev_variables, namespace)
-            if not variables:
-                return tracer_callback
 
             # Branch detection — evaluate the condition at runtime
             branches_taken: dict = {}
@@ -201,8 +213,14 @@ def run_trace(
                                 # Fallback for Python < 3.9
                                 condition_expr = f"<condition on line {node.test.lineno}>"
                             
-                            # Evaluate the condition in the current namespace
-                            result = eval(condition_expr, namespace)
+                            # SAFETY: This eval() runs inside the already-sandboxed
+                            # subprocess spawned by runner.py — NOT in the FastAPI
+                            # process. The validator has already blocked dangerous
+                            # builtins before we reach this point.
+                            # LIMITATION: Conditions with side effects (e.g.
+                            # counter.increment()) execute twice — once by exec(),
+                            # once by eval() here. Acceptable for read-only tracing.
+                            result = eval(condition_expr, namespace)  # noqa: S307
                             branches_taken["if"] = {
                                 "taken": bool(result),
                                 "line": line_no,
@@ -222,6 +240,7 @@ def run_trace(
                 variables=variables,
                 branches_taken=branches_taken,
                 duration_ms=0.0,
+                call_depth=_get_call_depth(frame),
             )
             steps.append(step)
             prev_variables = {k: v.value for k, v in variables.items()}
@@ -235,8 +254,6 @@ def run_trace(
         # This is how list comprehensions expose their result variable
         elif event == "return":
             variables = _capture_variables(frame, prev_variables, namespace)
-            if not variables:
-                return None
 
             step = TraceStep(
                 step_number=len(steps),
@@ -246,6 +263,7 @@ def run_trace(
                 variables=variables,
                 branches_taken={},
                 duration_ms=0.0,
+                call_depth=_get_call_depth(frame),
             )
             steps.append(step)
             prev_variables = {k: v.value for k, v in variables.items()}
@@ -265,6 +283,11 @@ def run_trace(
 
     duration_ms = (time.perf_counter() - start_time) * 1000
     if steps:
+        # TODO: Replace uniform distribution with actual per-step timing.
+        # To do this, capture time.perf_counter() at the start and end of each
+        # tracer_callback invocation and store it in TraceStep.duration_ms directly.
+        # Current approach (total / count) is misleading — loops appear to take the
+        # same time as assignments.
         per_step = duration_ms / len(steps)
         for step in steps:
             step.duration_ms = round(per_step, 3)
@@ -294,4 +317,5 @@ def _step_to_dict(step: TraceStep) -> dict:
         },
         "branches_taken": step.branches_taken,
         "duration_ms": step.duration_ms,
+        "call_depth": step.call_depth,
     }

@@ -27,8 +27,7 @@ async def get_profile(authorization: str = Header(None)):
     user = await get_current_user(authorization)
     user_id = user.get("id", "")
     
-    from app.config import Settings
-    settings = Settings()
+    from app.config import settings
     
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
@@ -83,8 +82,7 @@ async def update_profile(
             detail={"error": "INVALID_EXPERIENCE", "message": "experience_level must be: student, junior, or mid"},
         )
     
-    from app.config import Settings
-    settings = Settings()
+    from app.config import settings
     
     # Decode JWT to get user UUID
     from app.routers.auth import get_current_user

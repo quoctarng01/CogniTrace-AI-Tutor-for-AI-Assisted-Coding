@@ -1,5 +1,4 @@
 """Unit tests for the SM-2 spaced repetition algorithm."""
-import pytest
 from datetime import date, timedelta
 from app.routers.review import sm2_calculate, MIN_EF
 

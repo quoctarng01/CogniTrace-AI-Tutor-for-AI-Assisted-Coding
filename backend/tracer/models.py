@@ -38,6 +38,7 @@ class TraceStep:
     variables: dict[str, VariableInfo]
     branches_taken: dict
     duration_ms: float
+    call_depth: int = 1
 
 
 @dataclass

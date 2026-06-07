@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import type { editor as MonacoEditorTypes } from 'monaco-editor';
 import dynamic from 'next/dynamic';
 import styles from './CodeEditor.module.css';
 import { CodeEditorSkeleton } from './CodeEditorSkeleton';
@@ -14,6 +15,7 @@ interface CodeEditorProps {
   onLineClick?: (lineNumber: number) => void;
   onAnnotationClick?: (annotation: Annotation, lineNumber: number) => void;
   currentLine?: number;
+  compareLine?: number;
   annotations?: Annotation[];
   readOnly?: boolean;
   height?: string;
@@ -25,13 +27,14 @@ export function CodeEditor({
   onLineClick,
   onAnnotationClick,
   currentLine,
+  compareLine,
   annotations = [],
   readOnly = false,
   height = '100%',
 }: CodeEditorProps) {
-  const editorRef = useRef<unknown>(null);
-  const monacoRef = useRef<unknown>(null);
-  const decorationsRef = useRef<{ clear: () => void } | null>(null);
+  const editorRef = useRef<MonacoEditorTypes.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
+  const decorationsRef = useRef<MonacoEditorTypes.IEditorDecorationsCollection | null>(null);
   const isMountedRef = useRef(true);
   const [isEditorReady, setIsEditorReady] = useState(false);
   const [activeTheme, setActiveTheme] = useState<'claude-light' | 'claude-dark'>('claude-light');
@@ -58,19 +61,15 @@ export function CodeEditor({
   useEffect(() => {
     if (!isEditorReady) return;
 
-    const editor = editorRef.current as {
-      getModel?: () => { setModelMarkers: (owner: string, markers: unknown[]) => void } | null;
-    } | null;
-    const monaco = monacoRef.current as {
-      editor?: { setModelMarkers: (model: unknown, owner: string, markers: unknown[]) => void };
-    } | null;
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
 
-    if (!editor?.getModel) return;
+    if (!editor || !monaco || !editor.getModel) return;
 
     const severityToMonaco = {
-      high: 'error' as const,
-      medium: 'warning' as const,
-      low: 'hint' as const,
+      high: monaco.MarkerSeverity.Error,
+      medium: monaco.MarkerSeverity.Warning,
+      low: monaco.MarkerSeverity.Hint,
     };
 
     const markers = annotations.map(ann => ({
@@ -91,7 +90,7 @@ export function CodeEditor({
       monaco.editor.setModelMarkers(model, 'codescope-analyzer', markers);
     } else {
       // Fallback: setModelMarkers on the model itself (older Monaco API)
-      (model as { setModelMarkers: (owner: string, markers: unknown[]) => void }).setModelMarkers(
+      (model as unknown as { setModelMarkers: (owner: string, markers: unknown[]) => void }).setModelMarkers(
         'codescope-analyzer',
         markers
       );
@@ -101,7 +100,7 @@ export function CodeEditor({
       if (monaco?.editor?.setModelMarkers) {
         monaco.editor.setModelMarkers(model, 'codescope-analyzer', []);
       } else {
-        (model as { setModelMarkers: (owner: string, markers: unknown[]) => void }).setModelMarkers(
+        (model as unknown as { setModelMarkers: (owner: string, markers: unknown[]) => void }).setModelMarkers(
           'codescope-analyzer',
           []
         );
@@ -110,13 +109,13 @@ export function CodeEditor({
   }, [annotations, isEditorReady]);
 
   const handleMount = useCallback(
-    (editor: unknown, monaco: unknown) => {
+    (editor: MonacoEditorTypes.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
       if (!isMountedRef.current) return;
       editorRef.current = editor;
       monacoRef.current = monaco;
 
       // Register Claude themes
-      const monacoInstance = monaco as any;
+      const monacoInstance = monaco;
       if (monacoInstance?.editor?.defineTheme) {
         monacoInstance.editor.defineTheme('claude-dark', {
           base: 'vs-dark',
@@ -163,13 +162,8 @@ export function CodeEditor({
       setIsEditorReady(true);
 
       // Add line click handler
-      const monacoEditor = editor as {
-        onMouseDown: (
-          callback: (e: { target: { position?: { lineNumber?: number } } }) => void
-        ) => void;
-      };
-      if (onLineClick && monacoEditor?.onMouseDown) {
-        monacoEditor.onMouseDown(e => {
+      if (onLineClick && editor?.onMouseDown) {
+        editor.onMouseDown(e => {
           if (e.target?.position?.lineNumber) {
             onLineClick(e.target.position.lineNumber);
           }
@@ -179,18 +173,13 @@ export function CodeEditor({
     [onLineClick]
   );
 
-  // Update line decorations whenever currentLine changes
+  // Update line decorations whenever currentLine or compareLine changes
   useEffect(() => {
     // Wait for editor to be ready before applying decorations
     if (!isEditorReady) return;
 
-    const editor = editorRef.current as {
-      createDecorationsCollection: (d: unknown[]) => { clear: () => void };
-      getDomNode?: () => HTMLElement | null;
-    } | null;
-    const monaco = monacoRef.current as {
-      Range: new (ln: number, sc: number, le: number, ec: number) => unknown;
-    } | null;
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
 
     if (!editor || !monaco || !isMountedRef.current) return;
 
@@ -200,29 +189,44 @@ export function CodeEditor({
       decorationsRef.current = null;
     }
 
-    if (currentLine === undefined || currentLine < 1) return;
+    const newDecorations: MonacoEditorTypes.IModelDeltaDecoration[] = [];
 
-    // Apply new decoration with a small delay to ensure editor is ready
+    if (currentLine !== undefined && currentLine >= 1) {
+      newDecorations.push({
+        range: new monaco.Range(currentLine, 1, currentLine, 1),
+        options: {
+          isWholeLine: true,
+          className: styles.currentLineHighlight,
+          linesDecorationsClassName: styles.currentLineBorder,
+        },
+      });
+    }
+
+    if (compareLine !== undefined && compareLine >= 1) {
+      newDecorations.push({
+        range: new monaco.Range(compareLine, 1, compareLine, 1),
+        options: {
+          isWholeLine: true,
+          className: styles.compareLineHighlight,
+          linesDecorationsClassName: styles.compareLineBorder,
+        },
+      });
+    }
+
+    // Apply new decorations with a small delay to ensure editor is ready
     const timeoutId = setTimeout(() => {
       if (!isMountedRef.current || !editorRef.current || !monacoRef.current) return;
       try {
-        decorationsRef.current = (editorRef.current as typeof editor).createDecorationsCollection([
-          {
-            range: new (monacoRef.current as typeof monaco).Range(currentLine, 1, currentLine, 1),
-            options: {
-              isWholeLine: true,
-              className: styles.currentLineHighlight,
-              linesDecorationsClassName: styles.currentLineBorder,
-            },
-          },
-        ]);
+        if (newDecorations.length > 0) {
+          decorationsRef.current = editorRef.current.createDecorationsCollection(newDecorations);
+        }
       } catch {
         // Editor may be disposing, ignore
       }
     }, 50);
 
     return () => clearTimeout(timeoutId);
-  }, [currentLine, isEditorReady]);
+  }, [currentLine, compareLine, isEditorReady]);
 
   // Cleanup on unmount
   useEffect(() => {

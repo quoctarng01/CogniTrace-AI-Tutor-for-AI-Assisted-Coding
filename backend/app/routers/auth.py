@@ -3,10 +3,9 @@
 Supabase JWT verification — validates Bearer token and returns the user record.
 Used as a dependency by other routers: Depends(get_current_user)
 """
-from fastapi import HTTPException, Header, Depends
+from fastapi import HTTPException, Header
 from typing import Optional
 import httpx
-import json
 import logging
 
 logger = logging.getLogger("codescope.auth")
@@ -58,8 +57,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     # Log token prefix (first 20 chars) for debugging - NEVER log full token
     logger.debug("auth_token_received")
 
-    from app.config import Settings
-    settings = Settings()
+    from app.config import settings
     logger.debug("auth_supabase_url", extra={"supabase_url": settings.supabase_url})
 
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -90,8 +88,7 @@ async def get_profile_id(token: str) -> str:
     token: JWT string AFTER 'Bearer ' prefix has been stripped.
     The auth user id maps to profiles.user_id.
     """
-    from app.config import Settings
-    settings = Settings()
+    from app.config import settings
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         # Step 1: Decode/verify token against Supabase auth to get the user UUID

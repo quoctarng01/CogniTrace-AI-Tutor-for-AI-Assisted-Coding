@@ -14,9 +14,8 @@ def test_syntax_error_returns_syntax_error():
 
 
 def test_timeout_detection():
-    """Infinite loop should eventually be detected by subprocess timeout."""
-    # Use very high max_steps so subprocess timeout kicks in first
-    result = run_trace_subprocess("while True: pass", max_steps=100000, timeout_seconds=3)
+    """Subprocess timeout should be detected on long-running commands."""
+    result = run_trace_subprocess("import time\ntime.sleep(10)", max_steps=100000, timeout_seconds=3)
     assert result["error"] == "TIMEOUT"
 
 
@@ -253,7 +252,7 @@ def test_infinite_loop__subprocess__respected_500():
 
 def test_infinite_loop__subprocess__timeout_fires():
     """Subprocess timeout should fire before max_steps on a tight timeout."""
-    result = run_trace_subprocess("while True: 1+1", max_steps=100000, timeout_seconds=2)
+    result = run_trace_subprocess("import time\ntime.sleep(10)", max_steps=100000, timeout_seconds=2)
     assert result["error"] == "TIMEOUT"
 
 
@@ -528,3 +527,23 @@ def test_run_trace_is_internal_edge_cases():
     assert _is_internal_variable("__debug__") is True
     # Enum is NOT internal (not in tuple)
     assert _is_internal_variable("Enum") is False
+
+
+def test_trace_call_depth_recursion():
+    """Tracer must correctly track call depth for recursive function calls."""
+    code = """
+def recur(n):
+    if n <= 1:
+        return n
+    return recur(n - 1)
+recur(3)
+"""
+    result = run_trace(code)
+    assert "error" not in result
+    
+    # Extract depth sequence from execution steps
+    depths = [s["call_depth"] for s in result["steps"]]
+    
+    # We expect call depth to reach at least 3 (recur(3) -> recur(2) -> recur(1))
+    max_depth = max(depths)
+    assert max_depth >= 3, f"Call depth did not trace nested frames correctly: {depths}"

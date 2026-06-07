@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 
@@ -120,7 +120,7 @@ def _check_mutable_default(node: ast.FunctionDef, annotations: list[Annotation])
                 )
             )
         if isinstance(default, ast.Set) or _is_mutable_call(default):
-            type_name = type(default.value).__name__ if isinstance(default, ast.Constant) else (
+            type_name = "set" if isinstance(default, ast.Set) else (
                 default.func.id if isinstance(default.func, ast.Name) else default.func.attr
             )
             annotations.append(
@@ -241,19 +241,24 @@ def _check_implicit_truthiness(node: ast.If, annotations: list[Annotation]) -> N
 # ---------------------------------------------------------------------------
 def _check_requests_no_timeout(node: ast.Call, annotations: list[Annotation]) -> None:
     """Flag requests.get/post calls without a timeout argument."""
-    # Check if this is a call to requests.get / requests.post / requests.put / requests.delete
-    is_request_call = False
+    # Only flag calls in the form: requests.<method>(...)
+    # Not: session.get(), cache.get(), db.post(), etc.
     request_methods = ("get", "post", "put", "patch", "delete", "head", "options")
     func_name: str | None = None
 
-    if isinstance(node.func, ast.Attribute):
-        attr = node.func.attr
-        if attr in request_methods:
-            is_request_call = True
-            func_name = attr
-
-    if not is_request_call:
+    if not isinstance(node.func, ast.Attribute):
         return
+
+    attr = node.func.attr
+    if attr not in request_methods:
+        return
+
+    # Verify the object is literally named "requests" — not a session, client, etc.
+    caller = node.func.value
+    if not isinstance(caller, ast.Name) or caller.id != "requests":
+        return
+
+    func_name = attr
 
     # Check if 'timeout' is in the keyword arguments
     has_timeout = any(kw.arg == "timeout" for kw in node.keywords)

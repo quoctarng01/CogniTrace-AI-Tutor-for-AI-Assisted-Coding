@@ -22,3 +22,12 @@
 .currentLineBorder {
   border-left: 3px solid var(--accent);
 }
+
+/* Highlight for the counterfactual comparing executing line */
+.compareLineHighlight {
+  background: rgba(16, 185, 129, 0.1) !important; /* light green */
+}
+
+.compareLineBorder {
+  border-left: 3px solid #10b981; /* green border */
+}

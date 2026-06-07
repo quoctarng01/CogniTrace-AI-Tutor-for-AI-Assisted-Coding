@@ -17,6 +17,8 @@ export interface ExplanationParams {
   line_number: number;
   line_content: string;
   locals: Record<string, { type: string; value: string }>;
+  ollama_endpoint?: string;
+  token?: string | null;
 }
 
 export interface UseStreamingExplanationReturn {
@@ -67,12 +69,20 @@ export function useStreamingExplanation(apiBaseUrl?: string): UseStreamingExplan
       setProvider(null);
       setState('connecting');
 
-      const query = new URLSearchParams({
+      const queryParams: Record<string, string> = {
         code: params.code,
         line_number: String(params.line_number),
         line_content: params.line_content,
         locals_json: JSON.stringify(params.locals),
-      });
+      };
+      if (params.ollama_endpoint) {
+        queryParams.ollama_endpoint = params.ollama_endpoint;
+      }
+      if (params.token) {
+        queryParams.token = params.token;
+      }
+
+      const query = new URLSearchParams(queryParams);
 
       const url = `${baseUrl}/api/llm/explain/stream?${query.toString()}`;
       const es = new EventSource(url);

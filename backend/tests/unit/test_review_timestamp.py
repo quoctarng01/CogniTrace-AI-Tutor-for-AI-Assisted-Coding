@@ -1,5 +1,4 @@
 """Unit tests for review timestamp — FIX-HI-01."""
-import pytest
 import inspect
 
 

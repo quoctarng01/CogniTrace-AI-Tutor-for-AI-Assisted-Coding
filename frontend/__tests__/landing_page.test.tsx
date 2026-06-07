@@ -7,28 +7,28 @@ describe('Landing Page', () => {
   it('renders hero section with title', () => {
     render(<Home />);
 
-    expect(screen.getByText(/Understand Python Code/)).toBeInTheDocument();
-    expect(screen.getByText(/One Step at a Time/)).toBeInTheDocument();
+    expect(screen.getByText(/Pasted AI-generated code/i)).toBeInTheDocument();
+    expect(screen.getByText(/No idea why it is breaking/i)).toBeInTheDocument();
   });
 
   it('renders feature cards', () => {
     render(<Home />);
 
-    expect(screen.getByText(/Step-by-Step Execution/)).toBeInTheDocument();
-    expect(screen.getByText(/Branch Detection/)).toBeInTheDocument();
-    expect(screen.getByText(/AI Explanations/)).toBeInTheDocument();
-    expect(screen.getByText(/Spaced Repetition/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Step-by-Step Execution/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Branch Detection/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /AI Explanations/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Spaced Repetition/i })).toBeInTheDocument();
   });
 
   it('renders CTA button', () => {
     render(<Home />);
 
-    expect(screen.getByText(/Start Tracing/)).toBeInTheDocument();
+    expect(screen.getByText(/Start Tracing →/i)).toBeInTheDocument();
   });
 
   it('renders code examples section', () => {
     render(<Home />);
 
-    expect(screen.getByText(/Try Common Patterns/)).toBeInTheDocument();
+    expect(screen.getByText(/Try Common Patterns/i)).toBeInTheDocument();
   });
 });

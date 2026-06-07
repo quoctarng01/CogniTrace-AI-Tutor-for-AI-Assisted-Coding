@@ -61,3 +61,46 @@ async def test_cache_hit_streams_word_by_word():
             f"Tokens: {tokens}"
         )
         assert " ".join(t.strip() for t in tokens) == "This is a cached explanation."
+
+
+@pytest.mark.asyncio
+async def test_grade_explanation_success():
+    """Verify that grade_explanation correctly processes success response and parses JSON."""
+    router = LLMRouter()
+    
+    # Mock settings to use GitHub Models
+    with patch("app.services.llm_router.settings") as mock_settings:
+        mock_settings.github_models_pat = "mock_pat"
+        mock_settings.github_models_model = "mock_model"
+        
+        # Mock the post request on router._http
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        mock_response.json = lambda: {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"score": 90, "rating_suggestion": "good", "feedback": "Good job."}'
+                    }
+                }
+            ]
+        }
+        
+        with patch.object(router._http, "post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_response
+            
+            result = await router.grade_explanation(
+                code="x = 1",
+                steps_json="[]",
+                user_answer="x becomes 1"
+            )
+            
+            assert result["score"] == 90
+            assert result["rating_suggestion"] == "good"
+            assert result["feedback"] == "Good job."
+            
+            # Verify post was called with correct structure
+            mock_post.assert_called_once()
+            args, kwargs = mock_post.call_args
+            assert "json" in kwargs
+            assert kwargs["json"]["response_format"] == {"type": "json_object"}

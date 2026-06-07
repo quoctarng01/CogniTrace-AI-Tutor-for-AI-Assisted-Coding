@@ -9,11 +9,13 @@ import { trackEvent } from '@/lib/analytics';
 import type { TraceResult, TraceStep } from '@/types/trace';
 import type { Annotation } from '@/types/annotation';
 import { useTrace } from '@/hooks/useTrace';
+import { useAuth } from '@/hooks/useAuth';
 import { VariablePanel } from '@/components/tracer/VariablePanel';
 import { AnimationControls } from '@/components/tracer/AnimationControls';
 import { ExplanationPanel } from '@/components/llm/ExplanationPanel';
 import { WhatIfModal } from '@/components/tracer/WhatIfModal';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { TraceTreePanel } from '@/components/tracer/TraceTreePanel';
 import {
   EditorErrorBoundary,
   VariablePanelErrorBoundary,
@@ -63,6 +65,8 @@ export default function TracerPage() {
   const router = useRouter();
   const [code, setCode] = useState(SAMPLE_CODE);
   const [traceResult, setTraceResult] = useState<TraceResult | null>(null);
+  const [originalTraceResult, setOriginalTraceResult] = useState<TraceResult | null>(null);
+  const [compareMode, setCompareMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -91,6 +95,9 @@ export default function TracerPage() {
   const [showWhatIf, setShowWhatIf] = useState(false);
   const [whatIfLoading, setWhatIfLoading] = useState(false);
 
+  // Execution tree panel state
+  const [showTreePanel, setShowTreePanel] = useState(true);
+
   const steps = traceResult?.steps ?? [];
 
   // useTrace hook manages animation state from parent
@@ -109,14 +116,22 @@ export default function TracerPage() {
     reset,
   } = useTrace({ steps });
 
-  // ── Check authentication on mount ─────────────────────────────────
+  const handleSelectStep = useCallback(
+    (stepIdx: number) => {
+      jumpToStep(stepIdx);
+      if (playbackState === 'playing') {
+        pause();
+      }
+    },
+    [jumpToStep, playbackState, pause]
+  );
+
+  // ── Authentication state ───────────────────────────────────────────
+  const { isAuthenticated: isAuthFromHook } = useAuth();
+  // Sync with local state so the rest of the component doesn't change
   useEffect(() => {
-    async function checkAuth() {
-      const token = await getAuthToken();
-      setIsAuthenticated(!!token);
-    }
-    checkAuth();
-  }, []);
+    setIsAuthenticated(isAuthFromHook);
+  }, [isAuthFromHook]);
 
   // ── Track session time-on-task ───────────────────────────────────
   useEffect(() => {
@@ -224,6 +239,8 @@ export default function TracerPage() {
       });
       const result = await api.runTrace(code);
       setTraceResult(result);
+      setOriginalTraceResult(result);
+      setCompareMode(false);
       if (result.error) {
         setError(result.error_message ?? result.error);
         trackEvent('trace_run_failed', { error: result.error });
@@ -281,6 +298,15 @@ export default function TracerPage() {
           </button>
         )}
         <div className={styles.actions}>
+          {traceResult && (
+            <button
+              className={styles.outlineToggleBtn}
+              onClick={() => setShowTreePanel((prev) => !prev)}
+              title="Toggle Execution Outline"
+            >
+              {showTreePanel ? '📂 Hide Outline' : '📂 Show Outline'}
+            </button>
+          )}
           <ThemeToggle />
           {isAnalyzing && <span className={styles.analyzingBadge}>◈ Analyzing…</span>}
           {!isAnalyzing && annotations.length > 0 && (
@@ -324,6 +350,7 @@ export default function TracerPage() {
               onChange={setCode}
               onLineClick={handleLineClick}
               currentLine={traceResult ? currentLine : undefined}
+              compareLine={compareMode && originalTraceResult ? (originalTraceResult.steps[Math.min(currentStep, originalTraceResult.steps.length - 1)]?.line_number) : undefined}
               annotations={annotations}
             />
           </EditorErrorBoundary>
@@ -331,34 +358,67 @@ export default function TracerPage() {
 
         {/* Right panel */}
         <div className={styles.rightPanel}>
-          {/* Variable panel */}
-          <div className={styles.variablePanel}>
-            <VariablePanelErrorBoundary>
-              <VariablePanel
-                variables={currentStepData?.variables ?? {}}
-                branches={currentStepData?.branches_taken ?? {}}
-                isLoading={isLoading}
-              />
-            </VariablePanelErrorBoundary>
-          </div>
-
-          {/* Explanation panel */}
-          {showExplanation && (selectedLine !== null || currentStepData?.line_number) && (
-            <div className={styles.explanationPanel}>
-              <ExplanationPanelErrorBoundary>
-                <ExplanationPanel
-                  code={code}
-                  lineNumber={selectedLine ?? currentStepData?.line_number ?? 1}
-                  lineContent={
-                    code.split('\n')[(selectedLine ?? currentStepData?.line_number ?? 1) - 1] ?? ''
-                  }
-                  locals={currentStepData?.variables ?? {}}
-                  onClose={() => setShowExplanation(false)}
+          {compareMode && originalTraceResult ? (
+            <div className={styles.compareGrid}>
+              <div className={styles.compareCol}>
+                <h4 className={styles.compareColHeader}>⏮ Original Trace</h4>
+                <VariablePanel
+                  variables={originalTraceResult.steps[Math.min(currentStep, originalTraceResult.steps.length - 1)]?.variables ?? {}}
+                  branches={originalTraceResult.steps[Math.min(currentStep, originalTraceResult.steps.length - 1)]?.branches_taken ?? {}}
+                  isLoading={isLoading}
                 />
-              </ExplanationPanelErrorBoundary>
+              </div>
+              <div className={styles.compareCol}>
+                <h4 className={styles.compareColHeader}>🔁 Modified Trace</h4>
+                <VariablePanel
+                  variables={currentStepData?.variables ?? {}}
+                  branches={currentStepData?.branches_taken ?? {}}
+                  isLoading={isLoading}
+                />
+              </div>
             </div>
+          ) : (
+            <>
+              {/* Variable panel */}
+              <div className={styles.variablePanel}>
+                <VariablePanelErrorBoundary>
+                  <VariablePanel
+                    variables={currentStepData?.variables ?? {}}
+                    branches={currentStepData?.branches_taken ?? {}}
+                    isLoading={isLoading}
+                  />
+                </VariablePanelErrorBoundary>
+              </div>
+
+              {/* Explanation panel */}
+              {showExplanation && (selectedLine !== null || currentStepData?.line_number) && (
+                <div className={styles.explanationPanel}>
+                  <ExplanationPanelErrorBoundary>
+                    <ExplanationPanel
+                      code={code}
+                      lineNumber={selectedLine ?? currentStepData?.line_number ?? 1}
+                      lineContent={
+                        code.split('\n')[(selectedLine ?? currentStepData?.line_number ?? 1) - 1] ?? ''
+                      }
+                      locals={currentStepData?.variables ?? {}}
+                      onClose={() => setShowExplanation(false)}
+                    />
+                  </ExplanationPanelErrorBoundary>
+                </div>
+              )}
+            </>
           )}
         </div>
+
+        {/* Trace outline tree explorer */}
+        {traceResult && showTreePanel && (
+          <TraceTreePanel
+            steps={steps}
+            currentStep={currentStep}
+            onSelectStep={handleSelectStep}
+            code={code}
+          />
+        )}
       </main>
 
       {/* Bottom controls */}
@@ -406,14 +466,26 @@ export default function TracerPage() {
             }}
           />
           <div className={styles.lineActions}>
-            <button
-              className={styles.whatIfBtn}
-              onClick={() => setShowWhatIf(true)}
-              disabled={!traceResult || (traceResult.steps?.length ?? 0) === 0}
-              title={!traceResult ? 'Run the trace first' : 'Modify initial values and replay'}
-            >
-              🔄 What If?
-            </button>
+            {compareMode ? (
+              <button
+                className={styles.exitCompareBtn}
+                onClick={() => {
+                  setCompareMode(false);
+                  setTraceResult(originalTraceResult);
+                }}
+              >
+                ✕ Exit Compare
+              </button>
+            ) : (
+              <button
+                className={styles.whatIfBtn}
+                onClick={() => setShowWhatIf(true)}
+                disabled={!traceResult || (traceResult.steps?.length ?? 0) === 0}
+                title={!traceResult ? 'Run the trace first' : 'Modify initial values and replay'}
+              >
+                🔄 What If?
+              </button>
+            )}
             <button
               className={styles.whyBtn}
               onClick={handleWhyIsThisHere}
@@ -565,6 +637,7 @@ export default function TracerPage() {
                   total_steps: result.total_steps ?? result.steps?.length ?? 0,
                   duration_ms: result.duration_ms ?? 0,
                 });
+                setCompareMode(true);
               }
             } catch (err) {
               setError(err instanceof Error ? err.message : 'Failed to run trace');

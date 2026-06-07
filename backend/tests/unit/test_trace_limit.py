@@ -14,9 +14,8 @@ def test_trace_limit_enforcement_in_run_trace():
     assert "_get_trace_count_this_month" in source, (
         "HIGH-07: _get_trace_count_this_month helper not found in traces.py"
     )
-    assert "_is_pro_user_in_traces" in source, (
-        "HIGH-07: _is_pro_user_in_traces helper not found in traces.py. "
-        "Must be inlined to avoid circular import with llm.py."
+    assert "is_pro_user" in source, (
+        "HIGH-07: is_pro_user function not found in traces.py imports"
     )
     assert "FREE_TRACE_LIMIT" in source, (
         "HIGH-07: FREE_TRACE_LIMIT constant not found in run_trace"
@@ -53,10 +52,10 @@ async def test_free_user_blocked_at_50_traces():
 @pytest.mark.asyncio
 async def test_pro_user_bypasses_limit():
     """HIGH-07: Pro users should not be checked against the trace limit."""
-    from app.routers.traces import _is_pro_user_in_traces
+    from app.dependencies import is_pro_user
 
     # Test pro user
-    with patch('httpx.AsyncClient') as MockClient:
+    with patch('app.dependencies.httpx.AsyncClient') as MockClient:
         mock_instance = AsyncMock()
         mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
         mock_instance.__aexit__ = AsyncMock(return_value=None)
@@ -65,11 +64,11 @@ async def test_pro_user_bypasses_limit():
         mock_instance.get.return_value.json = lambda: [{"plan": "pro"}]
         MockClient.return_value = mock_instance
 
-        result = await _is_pro_user_in_traces("user-pro-123")
+        result = await is_pro_user("user-pro-123")
         assert result is True, "User with plan='pro' should return True"
 
     # Test free user
-    with patch('httpx.AsyncClient') as MockClient:
+    with patch('app.dependencies.httpx.AsyncClient') as MockClient:
         mock_instance = AsyncMock()
         mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
         mock_instance.__aexit__ = AsyncMock(return_value=None)
@@ -78,7 +77,7 @@ async def test_pro_user_bypasses_limit():
         mock_instance.get.return_value.json = lambda: [{"plan": "free"}]
         MockClient.return_value = mock_instance
 
-        result = await _is_pro_user_in_traces("user-free-456")
+        result = await is_pro_user("user-free-456")
         assert result is False, "User with plan='free' should return False"
 
 

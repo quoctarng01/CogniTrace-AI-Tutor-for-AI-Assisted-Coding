@@ -43,6 +43,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ── CORS Middleware ──────────────────────────────────────────────────────────
+# Added before routers to make execution order visually obvious.
+from app.config import settings  # noqa: E402
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # ── Request correlation ID middleware ─────────────────────────────────────────
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
@@ -76,15 +88,7 @@ app.include_router(examples.router, prefix="/api/examples")
 app.include_router(ratings.router)
 app.include_router(analytics_router, prefix="/api")
 
-from app.config import settings
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.get("/health")
@@ -118,14 +122,18 @@ async def health():
         all_ok = False
     
     # Check Redis connectivity
-    try:
-        import redis
-        r = redis.from_url(settings.redis_url, socket_connect_timeout=3)
-        r.ping()
-        checks["redis"] = {"ok": True, "detail": "ok"}
-    except Exception as e:
-        checks["redis"] = {"ok": False, "detail": f"error:{type(e).__name__}"}
-        all_ok = False
+    if settings.redis_enabled:
+        try:
+            import redis.asyncio as aioredis
+            r = aioredis.from_url(settings.redis_url, socket_connect_timeout=3)
+            await r.ping()
+            await r.aclose()
+            checks["redis"] = {"ok": True, "detail": "ok"}
+        except Exception as e:
+            checks["redis"] = {"ok": False, "detail": f"error:{type(e).__name__}"}
+            all_ok = False
+    else:
+        checks["redis"] = {"ok": True, "detail": "disabled"}
     
     # Check LLM provider connectivity
     try:

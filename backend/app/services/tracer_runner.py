@@ -17,7 +17,6 @@ import uuid
 import subprocess
 import tempfile
 import logging
-import shutil
 
 try:
     import resource  # Unix-only; skipped on Windows

@@ -307,6 +307,25 @@ export async function submitReviewRating(
   return res.json();
 }
 
+export interface GradeReviewResponse {
+  score: number;
+  rating_suggestion: 'again' | 'hard' | 'good' | 'easy';
+  feedback: string;
+}
+
+export async function gradeReviewExplanation(
+  cardId: string,
+  userAnswer: string
+): Promise<GradeReviewResponse> {
+  const res = await authFetch(`${getApiBase()}/review/grade`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ card_id: cardId, user_answer: userAnswer }),
+  });
+  throwOnStatus(res, 'grading');
+  return res.json();
+}
+
 // ── Shared trace ────────────────────────────────────────────────
 
 export async function fetchSharedTrace(shareToken: string): Promise<SharedTraceData> {
@@ -455,6 +474,31 @@ export async function saveExampleToReview(exampleId: string): Promise<SaveToQueu
   }
   if (res.status === 404) throw new Error('EXAMPLE_NOT_FOUND');
   if (!res.ok) throw new Error(`Failed to save example: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Submit a rating for an explanation.
+ * Auth: Optional (anonymous ratings allowed).
+ */
+export async function submitExplanationRating(params: {
+  explanation_id?: string | null;
+  trace_id?: string | null;
+  rating: number;
+}): Promise<{ status: string; rating: number }> {
+  const token = await _getAuthToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const res = await fetch(`${getApiBase()}/ratings`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(params),
+  });
+  throwOnStatus(res, 'explanation rating');
   return res.json();
 }
 

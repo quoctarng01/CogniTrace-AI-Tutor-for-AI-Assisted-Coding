@@ -10,10 +10,8 @@ Why Redis?
 """
 from __future__ import annotations
 
-import json
 import time
 import logging
-from typing import Optional
 from dataclasses import dataclass
 
 from app.config import settings
@@ -72,7 +70,7 @@ async def check_rate_limit_redis(key: str) -> RateLimitResult:
     window_seconds = settings.rate_limit_window_seconds
     limit = settings.rate_limit_per_hour
     now = time.time()
-    window_start = now - window_seconds
+    now - window_seconds
     
     try:
         # Use a Lua script for atomic read-modify-write
@@ -147,7 +145,6 @@ async def check_rate_limit_inmemory(key: str) -> RateLimitResult:
     In-memory fallback — only correct for single-instance deployments.
     WARNING: Does NOT work correctly with multiple Railway instances.
     """
-    import asyncio
     global _inmemory_buckets
     
     limit = settings.rate_limit_per_hour

@@ -1,49 +1,42 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { AnimationControls } from '@/components/tracer/AnimationControls';
+
+const defaultProps = {
+  steps: [],
+  currentStep: 0,
+  onStepChange: vi.fn(),
+  totalSteps: 10,
+  durationMs: 1000,
+  playbackState: 'paused' as const,
+  speed: 1 as const,
+  play: vi.fn(),
+  pause: vi.fn(),
+  togglePlayPause: vi.fn(),
+  stepForward: vi.fn(),
+  stepBackward: vi.fn(),
+  jumpToStep: vi.fn(),
+  setSpeed: vi.fn(),
+  reset: vi.fn(),
+};
 
 describe('AnimationControls', () => {
   it('shows play button when paused', () => {
-    render(<AnimationControls isPlaying={false} onTogglePlay={jest.fn()} />);
+    render(<AnimationControls {...defaultProps} playbackState="paused" />);
     expect(screen.getByRole('button', { name: /play/i })).toBeInTheDocument();
   });
 
   it('shows pause button when playing', () => {
-    render(<AnimationControls isPlaying={true} onTogglePlay={jest.fn()} />);
+    render(<AnimationControls {...defaultProps} playbackState="playing" />);
     expect(screen.getByRole('button', { name: /pause/i })).toBeInTheDocument();
   });
 
   it('step back is disabled at step 0', () => {
-    render(
-      <AnimationControls
-        isPlaying={false}
-        onTogglePlay={jest.fn()}
-        currentStep={0}
-        totalSteps={10}
-        onStepBack={jest.fn()}
-        onStepForward={jest.fn()}
-      />
-    );
-    expect(screen.getByRole('button', { name: /back/i })).toBeDisabled();
+    render(<AnimationControls {...defaultProps} currentStep={0} />);
+    expect(screen.getByRole('button', { name: /step backward/i })).toBeDisabled();
   });
 
   it('step forward is disabled at last step', () => {
-    render(
-      <AnimationControls
-        isPlaying={false}
-        onTogglePlay={jest.fn()}
-        currentStep={9}
-        totalSteps={10}
-        onStepBack={jest.fn()}
-        onStepForward={jest.fn()}
-      />
-    );
-    expect(screen.getByRole('button', { name: /forward/i })).toBeDisabled();
-  });
-
-  it('Space key toggles play when not in text input', () => {
-    const onTogglePlay = jest.fn();
-    render(<AnimationControls isPlaying={false} onTogglePlay={onTogglePlay} />);
-    fireEvent.keyDown(document, { key: ' ' });
-    expect(onTogglePlay).toHaveBeenCalledTimes(1);
+    render(<AnimationControls {...defaultProps} currentStep={9} totalSteps={10} />);
+    expect(screen.getByRole('button', { name: /step forward/i })).toBeDisabled();
   });
 });

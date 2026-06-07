@@ -19,7 +19,9 @@ describe('VariablePanel', () => {
     };
     render(<VariablePanel variables={variables} />);
     const xEl = screen.getByText('x');
-    expect(xEl.closest('[class*="variable"]')).toHaveClass('changed');
+    const container = xEl.closest('[class*="varItem"]');
+    expect(container).not.toBeNull();
+    expect(container?.className).toContain('changed');
   });
 
   it('shows branch decision icon for bool variables', () => {
@@ -33,6 +35,54 @@ describe('VariablePanel', () => {
 
   it('shows empty state when no variables', () => {
     render(<VariablePanel variables={{}} />);
-    expect(screen.getByText(/no variables/i)).toBeInTheDocument();
+    expect(screen.getByText(/Run the trace to see variable states/i)).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Branch rendering tests (added after fixing branch data shape mismatch)
+// ---------------------------------------------------------------------------
+
+describe('VariablePanel branch rendering', () => {
+  it('renders "if branch taken" when taken=true', () => {
+    const branches = {
+      if: { taken: true, line: 5, branch: 'then', condition: 'x > 0' },
+    };
+    render(<VariablePanel variables={{}} branches={branches} />);
+    expect(screen.getByText(/if branch taken/i)).toBeInTheDocument();
+  });
+
+  it('renders "else branch taken" when taken=false', () => {
+    const branches = {
+      if: { taken: false, line: 5, branch: 'else', condition: 'x > 0' },
+    };
+    render(<VariablePanel variables={{}} branches={branches} />);
+    expect(screen.getByText(/else branch taken/i)).toBeInTheDocument();
+  });
+
+  it('renders for loop branch', () => {
+    const branches = {
+      for: { iteration: 2, line: 3 },
+    };
+    render(<VariablePanel variables={{}} branches={branches} />);
+    expect(screen.getByText(/for loop/i)).toBeInTheDocument();
+  });
+
+  it('renders while loop branch', () => {
+    const branches = {
+      while: { line: 7 },
+    };
+    render(<VariablePanel variables={{}} branches={branches} />);
+    expect(screen.getByText(/while loop/i)).toBeInTheDocument();
+  });
+
+  it('renders nothing when branches is empty', () => {
+    const { container } = render(<VariablePanel variables={{}} branches={{}} />);
+    expect(container.querySelector('[class*="branchSection"]')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing when branches is undefined', () => {
+    const { container } = render(<VariablePanel variables={{}} />);
+    expect(container.querySelector('[class*="branchSection"]')).not.toBeInTheDocument();
   });
 });

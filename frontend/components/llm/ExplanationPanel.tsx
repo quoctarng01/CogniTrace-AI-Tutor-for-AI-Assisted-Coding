@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useStreamingExplanation } from '@/hooks/useStreamingExplanation';
+import { api, submitExplanationRating, Profile } from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
 import styles from './ExplanationPanel.module.css';
 
 interface ExplanationPanelProps {
@@ -19,27 +21,59 @@ export function ExplanationPanel({
   locals,
   onClose,
 }: ExplanationPanelProps) {
+  const { token, isAuthenticated } = useAuth();
   const { text, state, error, provider, start, stop, retry } = useStreamingExplanation();
 
   const [rating, setRating] = useState<number | null>(null);
+  const [userPlan, setUserPlan] = useState<'free' | 'pro'>('free');
+  const [isLocalMode, setIsLocalMode] = useState(false);
+  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
+  const [showOllamaHelp, setShowOllamaHelp] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      api.setToken(token);
+      api.getProfile()
+        .then(profile => {
+          const plan = profile.plan ?? 'free';
+          setUserPlan(plan);
+          if (plan === 'free') {
+            setIsLocalMode(true);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to fetch profile plan:', err);
+        });
+    } else {
+      setUserPlan('free');
+      setIsLocalMode(true);
+    }
+  }, [isAuthenticated, token]);
 
   const submitRating = useCallback(async (stars: number) => {
     setRating(stars);
     // Submit rating to backend
     try {
-      await fetch('/api/ratings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          explanation_id: null,
-          trace_id: null,
-          rating: stars,
-        }),
+      await submitExplanationRating({
+        explanation_id: null,
+        trace_id: null,
+        rating: stars,
       });
     } catch (err) {
       console.error('Failed to submit rating:', err);
     }
   }, []);
+
+  const handleStartExplanation = useCallback(() => {
+    start({
+      code,
+      line_number: lineNumber,
+      line_content: lineContent,
+      locals,
+      ollama_endpoint: isLocalMode ? ollamaUrl : undefined,
+      token,
+    });
+  }, [code, lineNumber, lineContent, locals, isLocalMode, ollamaUrl, token, start]);
 
   const isLoading = state === 'connecting' || state === 'streaming';
 
@@ -63,6 +97,68 @@ export function ExplanationPanel({
           )}
         </div>
       </div>
+
+      {/* Mode Switcher Toggle */}
+      <div className={styles.modeToggle}>
+        <button
+          className={`${styles.modeBtn} ${!isLocalMode ? styles.activeMode : ''}`}
+          onClick={() => setIsLocalMode(false)}
+          disabled={isLoading}
+        >
+          ☁️ Cloud AI {userPlan === 'free' && '(Rate Limit)'}
+        </button>
+        <button
+          className={`${styles.modeBtn} ${isLocalMode ? styles.activeMode : ''}`}
+          onClick={() => setIsLocalMode(true)}
+          disabled={isLoading}
+        >
+          ⚡ Local AI (Ollama)
+        </button>
+      </div>
+
+      {/* Free Plan Cloud Warning */}
+      {userPlan === 'free' && !isLocalMode && (
+        <div className={styles.freePlanWarning}>
+          ℹ️ <strong>Free Plan limits apply</strong>. Cloud AI has rate limits. Log in to a whitelisted examiner account or switch to **Local AI** for unlimited, free usage.
+        </div>
+      )}
+
+      {/* Local Mode Configuration */}
+      {isLocalMode && (
+        <div className={styles.localConfig}>
+          <div className={styles.endpointField}>
+            <label className={styles.endpointLabel}>Ollama URL:</label>
+            <input
+              type="text"
+              value={ollamaUrl}
+              onChange={e => setOllamaUrl(e.target.value)}
+              className={styles.endpointInput}
+              placeholder="http://localhost:11434"
+              disabled={isLoading}
+            />
+          </div>
+          <button
+            type="button"
+            className={styles.helpToggle}
+            onClick={() => setShowOllamaHelp(prev => !prev)}
+          >
+            {showOllamaHelp ? 'Hide Setup Help ▲' : 'Show Setup Help ▼'}
+          </button>
+
+          {showOllamaHelp && (
+            <div className={styles.helpBlock}>
+              <p>To run Ollama locally on your machine:</p>
+              <ol className={styles.helpSteps}>
+                <li>Download and install <a href="https://ollama.com" target="_blank" rel="noreferrer" className={styles.link}>Ollama</a>.</li>
+                <li>Start Ollama and pull the Llama model in your terminal:
+                  <pre className={styles.preCode}>ollama run llama3.2</pre>
+                </li>
+                <li>Keep the Ollama app running and generate explanations!</li>
+              </ol>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Code context */}
       <div className={styles.contextBlock}>
@@ -96,6 +192,11 @@ export function ExplanationPanel({
         {error && (
           <div className={styles.error}>
             <p>{error}</p>
+            {error.includes('Rate limit exceeded') && (
+              <p className={styles.errorHint}>
+                💡 Switch to <strong>Local AI (Ollama)</strong> above to get unlimited explanations.
+              </p>
+            )}
             <div className={styles.errorActions}>
               <button className={styles.retryBtn} onClick={retry}>
                 Try Again
@@ -130,9 +231,7 @@ export function ExplanationPanel({
       <div className={styles.actionBar}>
         <button
           className={styles.askBtn}
-          onClick={() =>
-            start({ code, line_number: lineNumber, line_content: lineContent, locals })
-          }
+          onClick={handleStartExplanation}
           disabled={isLoading}
         >
           {state === 'streaming' ? '⏳ Generating...' : 'Generate Explanation'}

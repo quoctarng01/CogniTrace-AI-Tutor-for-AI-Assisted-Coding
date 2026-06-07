@@ -9,7 +9,7 @@ async def track_event(request: Request):
     Saves an anonymous event to Supabase anonymous_events table.
     No auth required — anonymous by design.
     """
-    from app.config import Settings
+    from app.config import settings
     import httpx
     
     body = await request.json()
@@ -17,8 +17,6 @@ async def track_event(request: Request):
     event_type = body.get("event_type", "")
     metadata = body.get("metadata", {})
     occurred_at = body.get("occurred_at", datetime.now(timezone.utc).isoformat())
-
-    settings = Settings()
     async with httpx.AsyncClient(timeout=5.0) as client:
         await client.post(
             f"{settings.supabase_url}/rest/v1/anonymous_events",

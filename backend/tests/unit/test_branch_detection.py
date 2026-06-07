@@ -1,6 +1,4 @@
 """Tests for FIX-MD-02: Branch detection marks all as taken."""
-import sys
-import pytest
 
 
 def test_branch_detection_only_marks_taken_branch():
