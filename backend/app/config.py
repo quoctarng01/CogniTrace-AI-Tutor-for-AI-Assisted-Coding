@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     supabase_service_key: str = "postgres"
     
     # CORS - Load from env: ALLOWED_ORIGINS=http://localhost:3000,https://codescope.vercel.app
-    allowed_origins: list[str] = Field(
+    allowed_origins: list[str] | str = Field(
         default=["http://localhost:3000", "http://localhost:3001"],
     )
 
