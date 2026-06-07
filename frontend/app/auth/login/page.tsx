@@ -31,7 +31,7 @@ export default function LoginPage() {
         await signIn(email, password);
         // Verify localStorage is accessible before navigating
         await new Promise(resolve => setTimeout(resolve, 200));
-        const stored = localStorage.getItem('codescope-manual-session');
+        const stored = localStorage.getItem('cognitrace-manual-session');
         console.log(
           '[DEBUG] Login - verifying localStorage before nav:',
           stored ? 'EXISTS' : 'NULL'
@@ -79,7 +79,7 @@ export default function LoginPage() {
       <div className={styles.card}>
         <div className={styles.brand}>
           <span className={styles.logo}>◈</span>
-          <span className={styles.brandName}>CodeScope</span>
+          <span className={styles.brandName}>CogniTrace</span>
         </div>
         <h1 className={styles.title}>Sign in to your account</h1>
         <p className={styles.subtitle}>

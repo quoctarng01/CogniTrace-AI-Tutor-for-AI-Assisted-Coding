@@ -540,7 +540,7 @@ async def get_shared_trace(
                     status_code=410,
                     detail={
                         "error": "EXPIRED",
-                        "message": "This trace has expired. Sign in to CodeScope to view it.",
+                        "message": "This trace has expired. Sign in to CogniTrace to view it.",
                         "login_url": "/auth/login",
                     },
                 )

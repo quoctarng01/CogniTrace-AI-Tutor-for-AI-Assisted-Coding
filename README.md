@@ -1,6 +1,6 @@
-# CodeScope — Interactive Python Code Tracer & AI Tutor
+# CogniTrace — Interactive Python Code Tracer & AI Tutor
 
-CodeScope is an educational platform designed to help programming learners understand Python code execution dynamically. By bridging the gap between raw execution states and conceptual understanding, CodeScope performs AST static analysis, dynamic code tracing, and real-time LLM explanation streaming to help users master Python logic.
+CogniTrace is an educational platform designed to help programming learners understand Python code execution dynamically. By bridging the gap between raw execution states and conceptual understanding, CogniTrace performs AST static analysis, dynamic code tracing, and real-time LLM explanation streaming to help users master Python logic.
 
 ---
 
@@ -56,10 +56,10 @@ Implements the **SuperMemo-2 (SM-2)** scheduling algorithm to store and present 
 ## 🏗️ Key Engineering Decisions
 
 ### 1. Sandbox Isolation & AST Validation
-To safely run arbitrary Python code, CodeScope couples static pre-flight validation with strict runtime tracing. Static checks reject malicious imports or structures before they run. At runtime, the sandbox restricts disk, network, and system API access using `sys.settrace()` and operating-system limits (`setrlimit`).
+To safely run arbitrary Python code, CogniTrace couples static pre-flight validation with strict runtime tracing. Static checks reject malicious imports or structures before they run. At runtime, the sandbox restricts disk, network, and system API access using `sys.settrace()` and operating-system limits (`setrlimit`).
 
 ### 2. Bytecode-Level Branch Detection
-Rather than just reporting which line executed, CodeScope inspects CPython opcodes to capture:
+Rather than just reporting which line executed, CogniTrace inspects CPython opcodes to capture:
 - **Conditional Branching**: Whether an `if`/`else` condition was true or false.
 - **Boolean Short-Circuiting**: Explaining exactly why a compound logical expression (like `and` / `or`) evaluated early.
 - **Loop Progression**: Track iteration indexes of `for` and `while` structures.
@@ -73,7 +73,7 @@ Rather than just reporting which line executed, CodeScope inspects CPython opcod
 ## 🗂️ Project Structure
 
 ```
-codescope/
+cognitrace/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py           # FastAPI server & CORS policies
@@ -181,7 +181,7 @@ Copy `backend/.env.example` to `backend/.env`. Essential configurations include:
 
 ## 🧪 Testing Suite
 
-CodeScope enforces strict coverage checks across both backend and frontend layers:
+CogniTrace enforces strict coverage checks across both backend and frontend layers:
 
 ### Run Backend Unit & Integration Tests
 ```bash

@@ -79,7 +79,7 @@ export function CodeEditor({
       endLineNumber: ann.line,
       endColumn: Number.MAX_SAFE_INTEGER,
       message: `[${ann.pattern_id}] ${ann.message}\n\nSuggestion: ${ann.suggestion}`,
-      source: 'CodeScope',
+      source: 'CogniTrace',
     }));
 
     const model = editor.getModel();
@@ -87,21 +87,21 @@ export function CodeEditor({
 
     // Monaco API: monaco.editor.setModelMarkers(model, owner, markers)
     if (monaco?.editor?.setModelMarkers) {
-      monaco.editor.setModelMarkers(model, 'codescope-analyzer', markers);
+      monaco.editor.setModelMarkers(model, 'cognitrace-analyzer', markers);
     } else {
       // Fallback: setModelMarkers on the model itself (older Monaco API)
       (model as unknown as { setModelMarkers: (owner: string, markers: unknown[]) => void }).setModelMarkers(
-        'codescope-analyzer',
+        'cognitrace-analyzer',
         markers
       );
     }
 
     return () => {
       if (monaco?.editor?.setModelMarkers) {
-        monaco.editor.setModelMarkers(model, 'codescope-analyzer', []);
+        monaco.editor.setModelMarkers(model, 'cognitrace-analyzer', []);
       } else {
         (model as unknown as { setModelMarkers: (owner: string, markers: unknown[]) => void }).setModelMarkers(
-          'codescope-analyzer',
+          'cognitrace-analyzer',
           []
         );
       }

@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="CodeScope API",
+    title="CogniTrace API",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -94,7 +94,7 @@ app.include_router(analytics_router, prefix="/api")
 @app.get("/")
 async def root():
     """Root endpoint showing status and link to docs."""
-    return {"message": "CodeScope API is running. Go to /docs for Swagger documentation."}
+    return {"message": "CogniTrace API is running. Go to /docs for Swagger documentation."}
 
 
 @app.get("/health")

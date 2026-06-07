@@ -143,7 +143,7 @@ export default function SharedTracePage() {
   useEffect(() => {
     if (!trace) return;
     const firstLine = trace.code.split('\n')[0];
-    document.title = `CodeScope Trace — ${firstLine ? firstLine.slice(0, 60) : ''}`;
+    document.title = `CogniTrace Trace — ${firstLine ? firstLine.slice(0, 60) : ''}`;
   }, [trace]);
 
   const handleTrace = useCallback(async () => {
@@ -201,7 +201,7 @@ export default function SharedTracePage() {
           <h1>Trace not found</h1>
           <p>This shared trace may have been deleted or the link is invalid.</p>
           <Link href="/" className={styles.homeLink}>
-            ← Go to CodeScope
+            ← Go to CogniTrace
           </Link>
         </div>
       </div>
@@ -213,9 +213,9 @@ export default function SharedTracePage() {
       <div className={styles.page}>
         <div className={styles.notFound}>
           <h1>🔗 This trace link has expired</h1>
-          <p>Sign in to CodeScope to view this trace.</p>
+          <p>Sign in to CogniTrace to view this trace.</p>
           <Link href="/auth/login" className={styles.homeLink}>
-            ← Sign in to CodeScope
+            ← Sign in to CogniTrace
           </Link>
         </div>
       </div>
@@ -242,7 +242,7 @@ export default function SharedTracePage() {
             View Trace
           </button>
           <Link href="/" className={styles.homeLink}>
-            ← Go to CodeScope
+            ← Go to CogniTrace
           </Link>
         </div>
       </div>
@@ -254,7 +254,7 @@ export default function SharedTracePage() {
       <header className={styles.topBar}>
         <Link href="/" className={styles.brand}>
           <span className={styles.logo}>◈</span>
-          <span className={styles.brandName}>CodeScope</span>
+          <span className={styles.brandName}>CogniTrace</span>
         </Link>
         <div className={styles.actions}>
           <button

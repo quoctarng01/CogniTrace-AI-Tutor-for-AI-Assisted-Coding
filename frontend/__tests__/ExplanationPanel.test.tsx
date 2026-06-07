@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect } from 'vitest';
 import { ExplanationPanel } from '@/components/llm/ExplanationPanel';
 
@@ -40,13 +40,15 @@ describe('ExplanationPanel', () => {
     const fourthStar = stars[3];
     if (fourthStar) fireEvent.click(fourthStar);
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      '/api/ratings',
-      expect.objectContaining({
-        method: 'POST',
-        body: expect.stringContaining('"rating":4'),
-      })
-    );
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/ratings',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"rating":4'),
+        })
+      );
+    });
   });
 
   it('shows confirmation after rating', () => {

@@ -286,7 +286,7 @@ export default function TracerPage() {
       <header className={styles.topBar}>
         <div className={styles.brand}>
           <span className={styles.logo}>◈</span>
-          <span className={styles.brandName}>CodeScope</span>
+          <span className={styles.brandName}>CogniTrace</span>
         </div>
         {isAuthenticated && (
           <button

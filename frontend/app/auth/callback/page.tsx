@@ -11,6 +11,8 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const supabase = getSupabase();
+    let subscription: { unsubscribe: () => void } | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     // Check if there is a session
     supabase.auth.getSession().then(async ({ data: { session }, error }) => {
@@ -25,36 +27,37 @@ export default function AuthCallbackPage() {
           session,
           expiresAt: Date.now() + (session.expires_in ?? 3600) * 1000,
         };
-        localStorage.setItem('codescope-manual-session', JSON.stringify(storageData));
+        localStorage.setItem('cognitrace-manual-session', JSON.stringify(storageData));
 
         // Redirect to dashboard
         router.replace('/dashboard');
       } else {
         // If no session is found immediately, listen to auth state changes (handles redirects)
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+        const { data } = supabase.auth.onAuthStateChange(async (event, newSession) => {
           if (event === 'SIGNED_IN' && newSession) {
             const storageData = {
               session: newSession,
               expiresAt: Date.now() + (newSession.expires_in ?? 3600) * 1000,
             };
-            localStorage.setItem('codescope-manual-session', JSON.stringify(storageData));
-            subscription.unsubscribe();
+            localStorage.setItem('cognitrace-manual-session', JSON.stringify(storageData));
+            if (subscription) subscription.unsubscribe();
             router.replace('/dashboard');
           }
         });
+        subscription = data.subscription;
 
         // Timeout fallback if no sign-in event fires in 6 seconds
-        const timer = setTimeout(() => {
-          subscription.unsubscribe();
+        timer = setTimeout(() => {
+          if (subscription) subscription.unsubscribe();
           setError('Authentication timeout or failed.');
         }, 6000);
-
-        return () => {
-          clearTimeout(timer);
-          subscription.unsubscribe();
-        };
       }
     });
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      if (subscription) subscription.unsubscribe();
+    };
   }, [router]);
 
   if (error) {

@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "CodeScope",
+    "name": "CogniTrace",
     "tagline": "Hiểu code do AI tạo ra, từng bước một",
     "description": "Dán code Python do AI tạo và xem nó thực thi từng bước với trạng thái biến thay đổi theo thời gian thực."
   },
@@ -8,7 +8,7 @@
     "hero": {
       "title": "Thấy chính xác code AI tạo ra làm gì",
       "subtitle": "Dán code. Xem nó chạy. Hiểu tại sao nó hoạt động.",
-      "cta": "Thử CodeScope miễn phí",
+      "cta": "Thử CogniTrace miễn phí",
       "demo_placeholder": "Dán code Python do AI tạo vào đây"
     },
     "features": {
@@ -28,7 +28,7 @@
         },
         {
           "title": "Ôn tập cách quãng",
-          "description": "Lưu trace vào hàng đợi ôn tập. CodeScope lên lịch để bạn nhớ những gì đã học."
+          "description": "Lưu trace vào hàng đợi ôn tập. CogniTrace lên lịch để bạn nhớ những gì đã học."
         }
       ]
     },
@@ -69,8 +69,8 @@
     "upgrade": "Nâng cấp lên Pro",
     "sideEffectWarning": {
       "title": "Code bị chặn vì lý do an toàn",
-      "message": "Code này chứa các thao tác tiềm ẩn nguy hiểm mà CodeScope không thể thực thi an toàn.",
-      "details": "CodeScope thực thi code trong môi trường sandbox. Các pattern sau bị chặn: thao tác file, gọi mạng, thực thi subprocess, và thực thi code động.",
+      "message": "Code này chứa các thao tác tiềm ẩn nguy hiểm mà CogniTrace không thể thực thi an toàn.",
+      "details": "CogniTrace thực thi code trong môi trường sandbox. Các pattern sau bị chặn: thao tác file, gọi mạng, thực thi subprocess, và thực thi code động.",
       "understood": "Tôi hiểu"
     },
     "errors": {

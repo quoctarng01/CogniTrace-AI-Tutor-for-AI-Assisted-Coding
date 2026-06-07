@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "CodeScope",
+    "name": "CogniTrace",
     "tagline": "Understand your AI-generated code, step by step",
     "description": "Paste AI-generated Python code and watch it execute step-by-step with animated variable state. See which branches fire, which variables change, and why."
   },
@@ -8,7 +8,7 @@
     "hero": {
       "title": "See exactly what your AI-generated code does",
       "subtitle": "Paste code. Watch it run. Understand why it works.",
-      "cta": "Try CodeScope free",
+      "cta": "Try CogniTrace free",
       "demo_placeholder": "Paste your AI-generated Python code here"
     },
     "features": {
@@ -28,7 +28,7 @@
         },
         {
           "title": "Spaced repetition review",
-          "description": "Save traces to your review queue. CodeScope schedules reviews so you retain what you learn."
+          "description": "Save traces to your review queue. CogniTrace schedules reviews so you retain what you learn."
         }
       ]
     },
@@ -69,8 +69,8 @@
     "upgrade": "Upgrade to Pro",
     "sideEffectWarning": {
       "title": "Code blocked for safety",
-      "message": "This code contains potentially dangerous operations that CodeScope cannot safely execute.",
-      "details": "CodeScope executes code in a sandboxed environment. The following patterns are blocked: file operations, network calls, subprocess execution, and dynamic code execution.",
+      "message": "This code contains potentially dangerous operations that CogniTrace cannot safely execute.",
+      "details": "CogniTrace executes code in a sandboxed environment. The following patterns are blocked: file operations, network calls, subprocess execution, and dynamic code execution.",
       "understood": "I understand"
     },
     "errors": {

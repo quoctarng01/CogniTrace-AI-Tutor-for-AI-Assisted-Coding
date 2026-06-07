@@ -61,7 +61,7 @@ export default function Home() {
       <header className={styles.header}>
         <div className={styles.brand}>
           <span className={styles.logo}>◈</span>
-          <span className={styles.brandName}>CodeScope</span>
+          <span className={styles.brandName}>CogniTrace</span>
         </div>
         <nav className={styles.nav}>
           <Link href="/tracer" className={styles.navLink}>
@@ -83,7 +83,7 @@ export default function Home() {
             <span className={styles.heroHighlight}>No idea why it is breaking.</span>
           </h1>
           <p className={styles.heroSubtitle}>
-            CodeScope traces how Cursor, Copilot, and ChatGPT write Python —
+            CogniTrace traces how Cursor, Copilot, and ChatGPT write Python —
             variable by variable, branch by branch — then schedules spaced reviews
             so you actually remember what you shipped.
           </p>
@@ -154,7 +154,7 @@ result = fibonacci(8)`}</code>
           Start tracing Python code in your browser. No setup required.
         </p>
         <Link href="/tracer" className={styles.primaryBtn}>
-          Launch CodeScope →
+          Launch CogniTrace →
         </Link>
       </section>
 

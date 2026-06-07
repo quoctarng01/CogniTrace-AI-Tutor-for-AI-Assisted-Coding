@@ -82,7 +82,7 @@ export default function SignupPage() {
       <div className={styles.card}>
         <div className={styles.brand}>
           <span className={styles.logo}>◈</span>
-          <span className={styles.brandName}>CodeScope</span>
+          <span className={styles.brandName}>CogniTrace</span>
         </div>
         <h1 className={styles.title}>Create your account</h1>
         <p className={styles.subtitle}>

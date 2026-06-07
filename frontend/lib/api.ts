@@ -1,5 +1,5 @@
 /**
- * API client — typed fetch wrappers for all CodeScope endpoints.
+ * API client — typed fetch wrappers for all CogniTrace endpoints.
  */
 import type { TraceStep } from '@/types/trace';
 import type { AnalyzeResponse } from '@/types/annotation';
@@ -102,7 +102,7 @@ function getApiBase(): string {
   return API_BASE;
 }
 
-class CodeScopeAPI {
+class CogniTraceAPI {
   private baseUrl: string;
   private token: string | null = null;
 
@@ -218,7 +218,7 @@ class CodeScopeAPI {
 }
 
 // Singleton
-export const api = new CodeScopeAPI();
+export const api = new CogniTraceAPI();
 
 // ── Standalone auth-fetch helper ─────────────────────────────────
 
