@@ -152,7 +152,9 @@ async def health():
         checks["llm"] = {"ok": False, "detail": f"error:{type(e).__name__}"}
         all_ok = False
     
+    # Return 200 even if degraded to prevent orchestrator reboot loops,
+    # as the backend itself is responsive and running.
     return JSONResponse(
         {"status": "healthy" if all_ok else "degraded", "checks": checks},
-        status_code=200 if all_ok else 503,
+        status_code=200,
     )
