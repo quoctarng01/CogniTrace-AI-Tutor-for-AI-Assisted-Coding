@@ -9,6 +9,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application
 COPY . .
 
+# Run as non-privileged user for sandbox escape safety
+RUN useradd --create-home appuser && chown -R appuser:appuser /app
+USER appuser
+
 # Expose port (Railway defaults to PORT env var, fallback to 8080)
 ENV PORT=8080
 

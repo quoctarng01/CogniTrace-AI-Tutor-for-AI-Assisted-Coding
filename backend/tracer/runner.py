@@ -27,6 +27,13 @@ def run_trace(source: str, max_steps: int = 500, initial_namespace: dict | None 
             ns_json = json.dumps(initial_namespace or {})
             
             f.write("import sys, json, io, time\n")
+            f.write("try:\n")
+            f.write("    import resource\n")
+            f.write("    # Set limits: 256MB RAM, 4s CPU time\n")
+            f.write("    resource.setrlimit(resource.RLIMIT_AS, (256 * 1024 * 1024, 256 * 1024 * 1024))\n")
+            f.write("    resource.setrlimit(resource.RLIMIT_CPU, (4, 4))\n")
+            f.write("except ImportError:\n")
+            f.write("    pass\n")
             f.write(f"sys.path.insert(0, r'{escaped_dir}')\n")
             # Capture stdout so print() doesn't pollute JSON output
             f.write("sys.stdout = io.StringIO()\n")

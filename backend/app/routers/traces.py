@@ -167,8 +167,11 @@ async def run_trace(req: TraceRequest, authorization: str = Header(None), reques
             except (ValueError, SyntaxError):
                 pass  # Skip invalid values
 
-    # Step 3: Run the tracer in a subprocess
-    result = run_trace_subprocess(req.code, max_steps=500, initial_namespace=initial_ns)
+    # Step 3: Run the tracer in a subprocess (offloaded to thread pool)
+    from app.concurrency import run_with_concurrency_limit
+    result = await run_with_concurrency_limit(
+        lambda: run_trace_subprocess(req.code, max_steps=500, initial_namespace=initial_ns)
+    )
 
     # Step 4: Handle errors
     if "error" in result:

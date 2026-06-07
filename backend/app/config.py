@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     rate_limit_per_hour: int = 20
     rate_limit_window_seconds: int = 3600
 
+    # Concurrency
+    max_concurrent_traces: int = 25
+
     class Config:
         env_file = ".env"
         extra = "allow"

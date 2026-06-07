@@ -553,11 +553,13 @@ def test_branch_boolean_short_circuit():
 # =============================================================================
 
 def test_capture_exception_raised():
-    """Raised exception propagates up (not caught in run_trace)."""
-    # Current behavior: raised exceptions propagate to caller
-    # run_trace does not catch generic RuntimeError
-    with pytest.raises(RuntimeError):
-        run_trace("raise RuntimeError('test')")
+    """Raised exception should be caught and recorded as an EXCEPTION step."""
+    result = run_trace("raise RuntimeError('test')")
+    assert "error" not in result
+    assert result["total_steps"] == 3
+    last_step = result["steps"][-1]
+    assert last_step["opcode"] == "EXCEPTION"
+    assert last_step["exception_info"] == "RuntimeError: test"
 
 
 def test_capture_exception_in_function():

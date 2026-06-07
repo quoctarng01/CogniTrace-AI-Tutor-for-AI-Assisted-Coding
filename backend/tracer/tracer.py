@@ -278,6 +278,38 @@ def run_trace(
         pass
     except SystemExit:
         pass
+    except Exception as e:
+        # Catch unexpected exceptions in codescope execution and report them gracefully
+        import traceback
+        tb = sys.exc_info()[2]
+        
+        # Locate frame inside user code
+        exc_frame = None
+        curr_tb = tb
+        while curr_tb:
+            if curr_tb.tb_frame.f_code.co_filename == "<codescope>":
+                exc_frame = curr_tb.tb_frame
+            curr_tb = curr_tb.tb_next
+            
+        line_no = exc_frame.f_lineno if exc_frame is not None else (steps[-1].line_number if steps else 1)
+        
+        # Capture variables at point of exception
+        variables = {}
+        if exc_frame:
+            variables = _capture_variables(exc_frame, prev_variables, namespace)
+            
+        step = TraceStep(
+            step_number=len(steps),
+            line_number=line_no,
+            bytecode_offset=exc_frame.f_lasti if exc_frame else 0,
+            opcode="EXCEPTION",
+            variables=variables,
+            branches_taken={"exception": {"type": type(e).__name__, "message": str(e)}},
+            duration_ms=0.0,
+            call_depth=_get_call_depth(exc_frame) if exc_frame else 1,
+            exception_info=f"{type(e).__name__}: {str(e)}",
+        )
+        steps.append(step)
     finally:
         sys.settrace(None)
 
@@ -306,7 +338,7 @@ def run_trace(
 
 
 def _step_to_dict(step: TraceStep) -> dict:
-    return {
+    d = {
         "step_number": step.step_number,
         "line_number": step.line_number,
         "bytecode_offset": step.bytecode_offset,
@@ -319,3 +351,6 @@ def _step_to_dict(step: TraceStep) -> dict:
         "duration_ms": step.duration_ms,
         "call_depth": step.call_depth,
     }
+    if step.exception_info:
+        d["exception_info"] = step.exception_info
+    return d

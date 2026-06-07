@@ -39,6 +39,7 @@ class TraceStep:
     branches_taken: dict
     duration_ms: float
     call_depth: int = 1
+    exception_info: Optional[str] = None
 
 
 @dataclass
