@@ -12,6 +12,11 @@ from app.routers.analytics import router as analytics_router
 async def lifespan(app: FastAPI):
     """Startup and shutdown hooks."""
     from app.config import settings
+    import httpx
+    
+    # Initialize global HTTP client with connection pooling
+    limits = httpx.Limits(max_keepalive_connections=20, max_connections=100)
+    app.state.http_client = httpx.AsyncClient(limits=limits, timeout=10.0)
     
     # Validate at least one LLM provider is configured
     import logging
@@ -32,7 +37,9 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # Shutdown: close the LLM router's HTTP client
+    # Shutdown: close http clients
+    await app.state.http_client.aclose()
+    
     from app.services.llm_router import llm_router
     await llm_router.close()
 
@@ -98,31 +105,31 @@ async def root():
 
 
 @app.get("/health")
-async def health():
+async def health(request: Request):
     """
     Health check endpoint for Docker/liveness probes + readiness probes.
     Checks Supabase, Redis, and LLM provider connectivity.
     """
     from app.config import settings
-    import httpx
     from fastapi.responses import JSONResponse
     
+    client = request.app.state.http_client
     checks: dict[str, dict[str, str | bool]] = {}
     all_ok = True
     
     # Check Supabase connectivity
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            resp = await client.get(
-                f"{settings.supabase_url}/rest/v1/",
-                headers={"apikey": settings.supabase_service_key},
-            )
-            checks["supabase"] = {
-                "ok": resp.status_code == 200,
-                "detail": "ok" if resp.status_code == 200 else f"error:{resp.status_code}"
-            }
-            if resp.status_code != 200:
-                all_ok = False
+        resp = await client.get(
+            f"{settings.supabase_url}/rest/v1/",
+            headers={"apikey": settings.supabase_service_key},
+            timeout=3.0,
+        )
+        checks["supabase"] = {
+            "ok": resp.status_code == 200,
+            "detail": "ok" if resp.status_code == 200 else f"error:{resp.status_code}"
+        }
+        if resp.status_code != 200:
+            all_ok = False
     except Exception as e:
         checks["supabase"] = {"ok": False, "detail": f"error:{type(e).__name__}"}
         all_ok = False
@@ -144,12 +151,11 @@ async def health():
     # Check LLM provider connectivity
     try:
         if settings.ollama_cloud_url:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{settings.ollama_cloud_url}/api/tags")
-                checks["llm"] = {
-                    "ok": resp.status_code == 200,
-                    "detail": "ok" if resp.status_code == 200 else f"error:{resp.status_code}"
-                }
+            resp = await client.get(f"{settings.ollama_cloud_url}/api/tags", timeout=5.0)
+            checks["llm"] = {
+                "ok": resp.status_code == 200,
+                "detail": "ok" if resp.status_code == 200 else f"error:{resp.status_code}"
+            }
         elif settings.github_models_pat:
             checks["llm"] = {"ok": True, "detail": "github_models_configured"}
         else:

@@ -13,7 +13,9 @@ from tracer.runner import run_trace as run_trace_subprocess
 from app.config import settings
 from app.routers.auth import get_current_user
 from app.routers.review import _calculate_streak
-from app.dependencies import get_profile_id_for_user, is_pro_user
+from app.dependencies import get_profile_id_for_user, is_pro_user, get_http_client
+from fastapi import Depends
+from typing import Annotated
 
 logger = logging.getLogger("codescope.traces")
 
@@ -30,12 +32,12 @@ except ImportError:
 # ── Helper Functions ────────────────────────────────────────────────
 
 
-async def _get_trace_count_this_month(user_id: str, settings_obj) -> int:
+async def _get_trace_count_this_month(user_id: str, settings_obj, client: httpx.AsyncClient | None = None) -> int:
     """Count traces created by user in the current calendar month."""
     now = datetime.utcnow()
     month_start = f"{now.year}-{now.month:02d}-01"
     
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    if client is not None:
         resp = await client.get(
             f"{settings_obj.supabase_url}/rest/v1/traces",
             params={
@@ -48,6 +50,20 @@ async def _get_trace_count_this_month(user_id: str, settings_obj) -> int:
                 "apikey": settings_obj.supabase_service_key,
             },
         )
+    else:
+        async with httpx.AsyncClient(timeout=10.0) as temp_client:
+            resp = await temp_client.get(
+                f"{settings_obj.supabase_url}/rest/v1/traces",
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "created_at": f"gte.{month_start}",
+                    "select": "id",
+                },
+                headers={
+                    "Authorization": f"Bearer {settings_obj.supabase_service_key}",
+                    "apikey": settings_obj.supabase_service_key,
+                },
+            )
     
     if resp.status_code == 200:
         return len(resp.json())
@@ -113,7 +129,12 @@ def rate_limit_dependency(rate: str):
 
 @router.post("/traces/run", response_model=TraceResponse)
 @_rate_limit("30/minute")
-async def run_trace(req: TraceRequest, authorization: str = Header(None), request: Request = None):
+async def run_trace(
+    req: TraceRequest,
+    authorization: str = Header(None),
+    request: Request = None,
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
     """
     Execute Python code and return a step-by-step trace.
     Side-effect patterns (import os, eval, open(), etc.) are blocked.
@@ -122,16 +143,16 @@ async def run_trace(req: TraceRequest, authorization: str = Header(None), reques
     """
     # Step 0: Check rate limit for non-Pro users
     if authorization:
-        user = await get_current_user(authorization)
+        user = await get_current_user(request, authorization)
         user_id = user.get("id", "")
         
         # Check if user is Pro
-        is_pro = await is_pro_user(user_id)
+        is_pro = await is_pro_user(user_id, client)
         
         if not is_pro:
             # Count user's traces this month
             FREE_TRACE_LIMIT = 50
-            trace_count = await _get_trace_count_this_month(user_id, settings)
+            trace_count = await _get_trace_count_this_month(user_id, settings, client)
             
             if trace_count >= FREE_TRACE_LIMIT:
                 raise HTTPException(
@@ -230,16 +251,20 @@ class DashboardResponse(BaseModel):
 
 
 @router.get("/dashboard")
-async def get_dashboard(authorization: str = Header(None)):
+async def get_dashboard(
+    request: Request,
+    authorization: str = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
     """Aggregated dashboard: traces + due cards + streak. Single call for the frontend."""
     if not authorization:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     user_id = user.get("id", "")
 
     # Map user UUID (auth.users.id) to profile_id (profiles.id)
-    profile_id = await get_profile_id_for_user(user_id)
+    profile_id = await get_profile_id_for_user(user_id, client)
 
     if not profile_id:
         return DashboardResponse(
@@ -249,44 +274,43 @@ async def get_dashboard(authorization: str = Header(None)):
             total_traces=0,
         )
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        headers = {
-            "Authorization": f"Bearer {authorization[7:]}",
-            "apikey": settings.supabase_service_key,
-        }
+    headers = {
+        "Authorization": f"Bearer {authorization[7:]}",
+        "apikey": settings.supabase_service_key,
+    }
 
-        traces_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/traces",
-            params={"user_id": f"eq.{profile_id}", "select": "*", "order": "created_at.desc", "limit": "20"},
-            headers=headers,
-        )
-        traces = traces_resp.json() if traces_resp.status_code == 200 else []
+    traces_resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/traces",
+        params={"user_id": f"eq.{profile_id}", "select": "*", "order": "created_at.desc", "limit": "20"},
+        headers=headers,
+    )
+    traces = traces_resp.json() if traces_resp.status_code == 200 else []
 
-        # Fetch true total count (separate query, no limit)
-        count_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/traces",
-            params={"user_id": f"eq.{profile_id}", "select": "id"},
-            headers={**headers, "Prefer": "count=exact"},
-        )
-        total_traces_count = len(traces)  # default to page count
-        if count_resp.status_code == 200:
-            content_range = count_resp.headers.get("content-range", "")
-            if "/" in content_range:
-                try:
-                    total_traces_count = int(content_range.split("/")[-1])
-                except ValueError:
-                    pass
+    # Fetch true total count (separate query, no limit)
+    count_resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/traces",
+        params={"user_id": f"eq.{profile_id}", "select": "id"},
+        headers={**headers, "Prefer": "count=exact"},
+    )
+    total_traces_count = len(traces)  # default to page count
+    if count_resp.status_code == 200:
+        content_range = count_resp.headers.get("content-range", "")
+        if "/" in content_range:
+            try:
+                total_traces_count = int(content_range.split("/")[-1])
+            except ValueError:
+                pass
 
-        today = date.today().isoformat()
-        cards_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/review_cards",
-            params={"user_id": f"eq.{profile_id}", "next_review_date": f"lte.{today}", "select": "*"},
-            headers=headers,
-        )
-        due_cards = cards_resp.json() if cards_resp.status_code == 200 else []
+    today = date.today().isoformat()
+    cards_resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/review_cards",
+        params={"user_id": f"eq.{profile_id}", "next_review_date": f"lte.{today}", "select": "*"},
+        headers=headers,
+    )
+    due_cards = cards_resp.json() if cards_resp.status_code == 200 else []
 
     # Calculate streak using the profile_id
-    streak = await _calculate_streak(profile_id, settings.supabase_url, settings.supabase_service_key)
+    streak = await _calculate_streak(profile_id, settings.supabase_url, settings.supabase_service_key, client)
 
     return DashboardResponse(
         traces=traces,
@@ -333,7 +357,9 @@ class ForkTraceResponse(BaseModel):
 @router.post("/traces", response_model=dict)
 async def save_trace(
     req: SaveTraceRequest,
+    request: Request,
     authorization: str = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
 ):
     """Save a trace. Auth required."""
     logger.info("save_trace_called", extra={"location": "traces.py:save_trace", "has_auth": authorization is not None})
@@ -341,7 +367,7 @@ async def save_trace(
     if not authorization:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     user_id = user.get("id", "")
     logger.info("save_trace_user", extra={"user_id": user_id})
 
@@ -354,7 +380,7 @@ async def save_trace(
         })
 
     # Look up profiles.id where profiles.user_id = user_id (auth UUID)
-    profile_id = await get_profile_id_for_user(user_id)
+    profile_id = await get_profile_id_for_user(user_id, client)
 
     if not profile_id:
         raise HTTPException(status_code=404, detail="User profile not found")
@@ -372,20 +398,19 @@ async def save_trace(
         "steps": req.steps if req.steps else [],  # ← SAVE FULL STEPS for replay
     }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        logger.info("save_trace_supabase_call", extra={"url": settings.supabase_url})
-        # Use service role key in Authorization to bypass RLS
-        resp = await client.post(
-            f"{settings.supabase_url}/rest/v1/traces",
-            headers={
-                "Authorization": f"Bearer {settings.supabase_service_key}",
-                "apikey": settings.supabase_service_key,
-                "Content-Type": "application/json",
-                "Prefer": "return=representation",
-            },
-            json=trace_data,
-        )
-        logger.info("save_trace_response", extra={"status_code": resp.status_code})
+    logger.info("save_trace_supabase_call", extra={"url": settings.supabase_url})
+    # Use service role key in Authorization to bypass RLS
+    resp = await client.post(
+        f"{settings.supabase_url}/rest/v1/traces",
+        headers={
+            "Authorization": f"Bearer {settings.supabase_service_key}",
+            "apikey": settings.supabase_service_key,
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        },
+        json=trace_data,
+    )
+    logger.info("save_trace_response", extra={"status_code": resp.status_code})
 
     if resp.status_code not in (200, 201):
         raise HTTPException(status_code=502, detail=f"Failed to save trace: {resp.text}")
@@ -403,9 +428,11 @@ async def save_trace(
 
 @router.get("/traces")
 async def list_traces(
+    request: Request,
     authorization: str = Header(None),
     limit: int = 20,
     offset: int = 0,
+    client: httpx.AsyncClient = Depends(get_http_client),
 ):
     """List user's saved traces. Auth required."""
     logger.info("list_traces_called", extra={"location": "traces.py:list_traces", "has_auth": authorization is not None})
@@ -415,49 +442,48 @@ async def list_traces(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     try:
-        user = await get_current_user(authorization)
+        user = await get_current_user(request, authorization)
         user_id = user.get("id", "")
         logger.info("list_traces_got_user", extra={"user_id": user_id})
     except HTTPException as e:
         logger.warning("list_traces_auth_failed", extra={"detail": str(e.detail)})
         raise
-
+ 
     # Map user UUID (auth.users.id) to profile_id (profiles.id)
-    profile_id = await get_profile_id_for_user(user_id)
-
+    profile_id = await get_profile_id_for_user(user_id, client)
+ 
     if not profile_id:
         return {"traces": [], "total_traces": 0}
-
+ 
     logger.debug("list_traces_settings_loaded", extra={"supabase_url": settings.supabase_url})
-    
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        # Fetch the page of traces
-        resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/traces",
-            params={
-                "user_id": f"eq.{profile_id}",
-                "select": "*",
-                "limit": str(limit),
-                "offset": str(offset),
-                "order": "created_at.desc",
-            },
-            headers={
-                "Authorization": f"Bearer {authorization[7:]}",
-                "apikey": settings.supabase_service_key,
-            },
-        )
-        logger.info("list_traces_response", extra={"status_code": resp.status_code})
+     
+    # Fetch the page of traces
+    resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/traces",
+        params={
+            "user_id": f"eq.{profile_id}",
+            "select": "*",
+            "limit": str(limit),
+            "offset": str(offset),
+            "order": "created_at.desc",
+        },
+        headers={
+            "Authorization": f"Bearer {authorization[7:]}",
+            "apikey": settings.supabase_service_key,
+        },
+    )
+    logger.info("list_traces_response", extra={"status_code": resp.status_code})
 
-        # Fetch the true total count (no limit, ask Supabase for exact count)
-        count_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/traces",
-            params={"user_id": f"eq.{profile_id}", "select": "id"},
-            headers={
-                "Authorization": f"Bearer {authorization[7:]}",
-                "apikey": settings.supabase_service_key,
-                "Prefer": "count=exact",
-            },
-        )
+    # Fetch the true total count (no limit, ask Supabase for exact count)
+    count_resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/traces",
+        params={"user_id": f"eq.{profile_id}", "select": "id"},
+        headers={
+            "Authorization": f"Bearer {authorization[7:]}",
+            "apikey": settings.supabase_service_key,
+            "Prefer": "count=exact",
+        },
+    )
 
     traces = resp.json() if resp.status_code == 200 else []
 
@@ -479,6 +505,7 @@ async def list_traces(
 async def get_shared_trace(
     share_token: str,
     authorization: str | None = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
 ):
     """
     Fetch a trace by share_token.
@@ -494,7 +521,7 @@ async def get_shared_trace(
     owner_id = None
     if authorization:
         token = authorization.replace("Bearer ", "")
-        owner_id = await get_profile_id(token)
+        owner_id = await get_profile_id(token, client)
 
     if owner_id:
         params = {
@@ -519,12 +546,11 @@ async def get_shared_trace(
             "Authorization": f"Bearer {settings.supabase_service_key}",
         }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/traces",
-            params=params,
-            headers=headers,
-        )
+    resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/traces",
+        params=params,
+        headers=headers,
+    )
 
     if resp.status_code != 200 or not resp.json():
         raise HTTPException(status_code=404, detail="Trace not found")
@@ -557,7 +583,9 @@ async def get_shared_trace(
 @router.post("/traces/shared/{share_token}/fork")
 async def fork_shared_trace(
     share_token: str,
+    request: Request,
     authorization: str = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
 ):
     """
     Fork a shared trace — copies it into the authenticated user's account.
@@ -566,22 +594,21 @@ async def fork_shared_trace(
     if not authorization:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     user_id = user.get("id", "")
 
     # Map user UUID (auth.users.id) to profile_id (profiles.id)
-    profile_id = await get_profile_id_for_user(user_id)
+    profile_id = await get_profile_id_for_user(user_id, client)
 
     if not profile_id:
         raise HTTPException(status_code=404, detail="User profile not found")
 
     # Get the original trace
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        orig_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/traces",
-            params={"share_token": f"eq.{share_token}", "select": "*"},
-            headers={"apikey": settings.supabase_service_key},
-        )
+    orig_resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/traces",
+        params={"share_token": f"eq.{share_token}", "select": "*"},
+        headers={"apikey": settings.supabase_service_key},
+    )
 
     orig_traces = orig_resp.json() if orig_resp.status_code == 200 else []
     if not orig_traces:
@@ -601,17 +628,16 @@ async def fork_shared_trace(
         "steps": orig.get("steps"),
     }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        fork_resp = await client.post(
-            f"{settings.supabase_url}/rest/v1/traces",
-            headers={
-                "Authorization": f"Bearer {settings.supabase_service_key}",
-                "apikey": settings.supabase_service_key,
-                "Content-Type": "application/json",
-                "Prefer": "return=representation",
-            },
-            json=fork_data,
-        )
+    fork_resp = await client.post(
+        f"{settings.supabase_url}/rest/v1/traces",
+        headers={
+            "Authorization": f"Bearer {settings.supabase_service_key}",
+            "apikey": settings.supabase_service_key,
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        },
+        json=fork_data,
+    )
 
     if fork_resp.status_code not in (200, 201):
         raise HTTPException(status_code=502, detail="Failed to fork trace")
@@ -636,8 +662,10 @@ async def fork_shared_trace(
 @router.post("/traces/{trace_id}/share")
 async def share_trace(
     trace_id: str,
+    request: Request,
     req: ShareTraceRequest | None = None,
     authorization: str = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
 ):
     """
     Generate or update a share link for a trace.
@@ -673,39 +701,38 @@ async def share_trace(
     else:
         update_payload["password_hash"] = None
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        # Verify the trace belongs to this user first
-        user = await get_current_user(authorization)
-        user_id = user.get("id", "")
+    # Verify the trace belongs to this user first
+    user = await get_current_user(request, authorization)
+    user_id = user.get("id", "")
 
-        # Map user UUID (auth.users.id) to profile_id (profiles.id)
-        profile_id = await get_profile_id_for_user(user_id)
+    # Map user UUID (auth.users.id) to profile_id (profiles.id)
+    profile_id = await get_profile_id_for_user(user_id, client)
 
-        if not profile_id:
-            raise HTTPException(status_code=404, detail="User profile not found")
+    if not profile_id:
+        raise HTTPException(status_code=404, detail="User profile not found")
 
-        check_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/traces",
-            params={"id": f"eq.{trace_id}", "user_id": f"eq.{profile_id}", "select": "id"},
-            headers={
-                "Authorization": f"Bearer {authorization[7:]}",
-                "apikey": settings.supabase_service_key,
-            },
-        )
-        if check_resp.status_code != 200 or not check_resp.json():
-            raise HTTPException(status_code=404, detail="Trace not found")
+    check_resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/traces",
+        params={"id": f"eq.{trace_id}", "user_id": f"eq.{profile_id}", "select": "id"},
+        headers={
+            "Authorization": f"Bearer {authorization[7:]}",
+            "apikey": settings.supabase_service_key,
+        },
+    )
+    if check_resp.status_code != 200 or not check_resp.json():
+        raise HTTPException(status_code=404, detail="Trace not found")
 
-        resp = await client.patch(
-            f"{settings.supabase_url}/rest/v1/traces",
-            params={"id": f"eq.{trace_id}"},
-            headers={
-                "Authorization": f"Bearer {authorization[7:]}",
-                "apikey": settings.supabase_service_key,
-                "Content-Type": "application/json",
-                "Prefer": "return=minimal",
-            },
-            json=update_payload,
-        )
+    resp = await client.patch(
+        f"{settings.supabase_url}/rest/v1/traces",
+        params={"id": f"eq.{trace_id}"},
+        headers={
+            "Authorization": f"Bearer {authorization[7:]}",
+            "apikey": settings.supabase_service_key,
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        },
+        json=update_payload,
+    )
 
     if resp.status_code == 404:
         raise HTTPException(status_code=404, detail="Trace not found")

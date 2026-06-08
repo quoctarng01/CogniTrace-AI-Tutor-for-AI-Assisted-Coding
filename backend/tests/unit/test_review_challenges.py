@@ -38,7 +38,7 @@ async def test_get_review_card_generates_challenge_for_misconception():
         mock_get_profile.return_value = "profile-uuid"
         mock_generate.return_value = "def corrected_func(): pass"
         
-        result = await get_review_card("card-uuid", authorization="Bearer token")
+        result = await get_review_card("card-uuid", authorization="Bearer token", client=mock_client)
         
         assert result.concept_tag == "off_by_one"
         assert result.code_repair_challenge == "def corrected_func(): pass"
@@ -90,7 +90,7 @@ async def test_grade_review_card_calls_grade_code_repair():
         mock_get_profile.return_value = "profile-uuid"
         mock_grade.return_value = mock_grade_result
         
-        result = await grade_review_card(req, authorization="Bearer token")
+        result = await grade_review_card(req, authorization="Bearer token", client=mock_client)
         
         assert result["score"] == 95
         assert result["rating_suggestion"] == "easy"

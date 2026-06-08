@@ -54,10 +54,11 @@ class SupabaseRepository:
     Includes circuit breaker for resilience.
     """
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None):
         self.base_url = settings.supabase_url
         self.service_key = settings.supabase_service_key
-        self._client = httpx.AsyncClient(timeout=10.0)
+        self._client = client or httpx.AsyncClient(timeout=10.0)
+        self._owns_client = client is None
         self._circuit_open = False
         self._circuit_opened_at: float | None = None
         self._cache: dict[str, tuple[Any, float]] = {}
@@ -158,7 +159,8 @@ class SupabaseRepository:
         logger.warning("supabase_circuit_tripped")
 
     async def close(self):
-        await self._client.aclose()
+        if self._owns_client:
+            await self._client.aclose()
 
     # ── Profile ─────────────────────────────────────────────────────────
     async def get_profile_by_token(self, token: str) -> ProfileResult | None:

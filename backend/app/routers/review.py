@@ -14,19 +14,21 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.routers.auth import get_current_user
-from app.dependencies import get_profile_id_for_user
+from app.dependencies import get_profile_id_for_user, get_http_client
+from fastapi import APIRouter, HTTPException, Header, Depends, Request
+from typing import Optional, Annotated
 
 logger = logging.getLogger("codescope.review")
 
 router = APIRouter()
 
 
-async def _calculate_streak(user_id: str, supabase_url: str, supabase_key: str) -> int:
+async def _calculate_streak(user_id: str, supabase_url: str, supabase_key: str, client: httpx.AsyncClient | None = None) -> int:
     """
     Count consecutive days with at least 1 completed review, working backwards from today.
     Returns 0 if no reviews today.
     """
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    if client is not None:
         resp = await client.get(
             f"{supabase_url}/rest/v1/review_cards",
             params={
@@ -40,6 +42,21 @@ async def _calculate_streak(user_id: str, supabase_url: str, supabase_key: str) 
                 "apikey": supabase_key,
             },
         )
+    else:
+        async with httpx.AsyncClient(timeout=10.0) as temp_client:
+            resp = await temp_client.get(
+                f"{supabase_url}/rest/v1/review_cards",
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "select": "last_reviewed_at",
+                    "order": "last_reviewed_at.desc",
+                    "limit": "100",
+                },
+                headers={
+                    "Authorization": f"Bearer {supabase_key}",
+                    "apikey": supabase_key,
+                },
+            )
     
     if resp.status_code != 200:
         return 0
@@ -100,6 +117,7 @@ def sm2_calculate(
 ) -> tuple[float, int, int, date]:
     """
     Calculate the next review parameters using SM-2.
+    Supports a soft-fail logic for quality=2 (Hard rating) to avoid resetting repetitions to 0.
     
     Returns: (new_ef, new_interval, new_repetitions, next_review_date)
     """
@@ -109,10 +127,14 @@ def sm2_calculate(
     new_ef = max(MIN_EF, new_ef)  # Minimum EF is 1.3
     
     # Calculate new interval
-    if quality < 3:
-        # Failed — reset to 1 day
+    if quality < 2:
+        # Failed completely ("again") — reset to 1 day
         new_interval = 1
         new_repetitions = 0
+    elif quality == 2:
+        # Soft-fail ("hard") — halve repetitions and interval
+        new_repetitions = max(1, repetitions // 2)
+        new_interval = max(1, round(interval_days * 0.5))
     else:
         if repetitions == 0:
             new_interval = 1
@@ -123,7 +145,8 @@ def sm2_calculate(
         new_repetitions = repetitions + 1
     
     next_review = date.today()
-    if quality >= 3:
+    # For quality >= 2, we schedule it in the future
+    if quality >= 2:
         from datetime import timedelta
         next_review = date.today() + timedelta(days=new_interval)
     
@@ -160,7 +183,9 @@ class DueReviewsResponse(BaseModel):
 
 @router.get("/due", response_model=DueReviewsResponse)
 async def get_due_reviews(
+    request: Request = None,
     authorization: str = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
 ):
     """
     Get all review cards that are due for review today.
@@ -170,30 +195,29 @@ async def get_due_reviews(
     if not authorization:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     user_id = user.get("id", "")
 
     # Map user UUID (auth.users.id) to profile_id (profiles.id)
-    profile_id = await get_profile_id_for_user(user_id)
+    profile_id = await get_profile_id_for_user(user_id, client)
 
     if not profile_id:
         return DueReviewsResponse(cards=[], streak=0, total_due=0)
 
     today = date.today().isoformat()
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/review_cards",
-            params={
-                "user_id": f"eq.{profile_id}",
-                "next_review_date": f"lte.{today}",
-                "select": "*",
-            },
-            headers={
-                "Authorization": f"Bearer {authorization[7:]}",
-                "apikey": settings.supabase_service_key,
-            },
-        )
+    resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/review_cards",
+        params={
+            "user_id": f"eq.{profile_id}",
+            "next_review_date": f"lte.{today}",
+            "select": "*",
+        },
+        headers={
+            "Authorization": f"Bearer {authorization[7:]}",
+            "apikey": settings.supabase_service_key,
+        },
+    )
     cards = resp.json() if resp.status_code == 200 else []
 
     for card in cards:
@@ -206,7 +230,9 @@ async def get_due_reviews(
 @router.get("/{card_id}")
 async def get_review_card(
     card_id: str,
+    request: Request = None,
     authorization: str = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
 ):
     """
     Get a single review card with its full trace and steps.
@@ -215,37 +241,36 @@ async def get_review_card(
     if not authorization:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     user_id = user.get("id", "")
 
     # Map user UUID (auth.users.id) to profile_id (profiles.id)
-    profile_id = await get_profile_id_for_user(user_id)
+    profile_id = await get_profile_id_for_user(user_id, client)
 
     if not profile_id:
         raise HTTPException(status_code=404, detail="User profile not found")
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        headers = {
-            "Authorization": f"Bearer {authorization[7:]}",
-            "apikey": settings.supabase_service_key,
-        }
+    headers = {
+        "Authorization": f"Bearer {authorization[7:]}",
+        "apikey": settings.supabase_service_key,
+    }
 
-        card_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/review_cards",
-            params={"id": f"eq.{card_id}", "user_id": f"eq.{profile_id}", "select": "*"},
-            headers=headers,
-        )
-        cards = card_resp.json() if card_resp.status_code == 200 else []
-        if not cards:
-            raise HTTPException(status_code=404, detail="Card not found")
-        card = cards[0]
+    card_resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/review_cards",
+        params={"id": f"eq.{card_id}", "user_id": f"eq.{profile_id}", "select": "*"},
+        headers=headers,
+    )
+    cards = card_resp.json() if card_resp.status_code == 200 else []
+    if not cards:
+        raise HTTPException(status_code=404, detail="Card not found")
+    card = cards[0]
 
-        trace_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/traces",
-            params={"id": f"eq.{card['trace_id']}", "select": "*"},
-            headers=headers,
-        )
-        trace_data = trace_resp.json()[0] if trace_resp.status_code == 200 and trace_resp.json() else {}
+    trace_resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/traces",
+        params={"id": f"eq.{card['trace_id']}", "select": "*"},
+        headers=headers,
+    )
+    trace_data = trace_resp.json()[0] if trace_resp.status_code == 200 and trace_resp.json() else {}
 
     steps = json.loads(trace_data.get("steps", "[]")) if trace_data.get("steps") else []
 
@@ -292,11 +317,12 @@ async def get_review_card(
 async def submit_review(
     card_id: str,
     req: ReviewRatingRequest,
+    request: Request = None,
     authorization: str = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
 ):
     """
-    Submit a review rating for a card.
-
+    Submit a review rating (again/hard/good/easy) for a card.
     Updates the card's SM-2 parameters and schedules the next review.
 
     Auth: Required (Pro users only)
@@ -312,24 +338,23 @@ async def submit_review(
 
     quality = RATING_MAP[req.rating]
 
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     user_id = user.get("id", "")
 
     # Map user UUID (auth.users.id) to profile_id (profiles.id)
-    profile_id = await get_profile_id_for_user(user_id)
+    profile_id = await get_profile_id_for_user(user_id, client)
 
     if not profile_id:
         raise HTTPException(status_code=404, detail="User profile not found")
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/review_cards",
-            params={"id": f"eq.{card_id}", "user_id": f"eq.{profile_id}", "select": "*"},
-            headers={
-                "Authorization": f"Bearer {authorization[7:]}",
-                "apikey": settings.supabase_service_key,
-            },
-        )
+    resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/review_cards",
+        params={"id": f"eq.{card_id}", "user_id": f"eq.{profile_id}", "select": "*"},
+        headers={
+            "Authorization": f"Bearer {authorization[7:]}",
+            "apikey": settings.supabase_service_key,
+        },
+    )
     cards = resp.json() if resp.status_code == 200 else []
     if not cards:
         raise HTTPException(status_code=404, detail="Card not found")
@@ -339,24 +364,23 @@ async def submit_review(
         quality, card["easiness_factor"], card["interval_days"], card["repetitions"]
     )
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        await client.patch(
-            f"{settings.supabase_url}/rest/v1/review_cards",
-            params={"id": f"eq.{card_id}"},
-            headers={
-                "Authorization": f"Bearer {authorization[7:]}",
-                "apikey": settings.supabase_service_key,
-                "Content-Type": "application/json",
-                "Prefer": "return=minimal",
-            },
-            json={
-                "easiness_factor": round(new_ef, 2),
-                "interval_days": new_interval,
-                "repetitions": new_reps,
-                "next_review_date": next_date.isoformat(),
-                "last_reviewed_at": datetime.now(timezone.utc).isoformat(),
-            },
-        )
+    await client.patch(
+        f"{settings.supabase_url}/rest/v1/review_cards",
+        params={"id": f"eq.{card_id}"},
+        headers={
+            "Authorization": f"Bearer {authorization[7:]}",
+            "apikey": settings.supabase_service_key,
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        },
+        json={
+            "easiness_factor": round(new_ef, 2),
+            "interval_days": new_interval,
+            "repetitions": new_reps,
+            "next_review_date": next_date.isoformat(),
+            "last_reviewed_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
     logger.info(
         "review_submitted",
@@ -380,40 +404,41 @@ class GradeRequest(BaseModel):
 @router.post("/grade")
 async def grade_review_card(
     req: GradeRequest,
+    request: Request = None,
     authorization: str = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
 ):
     """Grade a user's typed explanation for active recall review."""
     if not authorization:
         raise HTTPException(status_code=401, detail="Authentication required")
         
-    user = await get_current_user(authorization)
+    user = await get_current_user(request, authorization)
     user_id = user.get("id", "")
-    profile_id = await get_profile_id_for_user(user_id)
+    profile_id = await get_profile_id_for_user(user_id, client)
     if not profile_id:
         raise HTTPException(status_code=404, detail="User profile not found")
 
     # Fetch card and trace details from Supabase
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        headers = {
-            "Authorization": f"Bearer {authorization[7:]}",
-            "apikey": settings.supabase_service_key,
-        }
-        card_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/review_cards",
-            params={"id": f"eq.{req.card_id}", "user_id": f"eq.{profile_id}", "select": "*"},
-            headers=headers,
-        )
-        cards = card_resp.json() if card_resp.status_code == 200 else []
-        if not cards:
-            raise HTTPException(status_code=404, detail="Card not found")
-        card = cards[0]
+    headers = {
+        "Authorization": f"Bearer {authorization[7:]}",
+        "apikey": settings.supabase_service_key,
+    }
+    card_resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/review_cards",
+        params={"id": f"eq.{req.card_id}", "user_id": f"eq.{profile_id}", "select": "*"},
+        headers=headers,
+    )
+    cards = card_resp.json() if card_resp.status_code == 200 else []
+    if not cards:
+        raise HTTPException(status_code=404, detail="Card not found")
+    card = cards[0]
 
-        trace_resp = await client.get(
-            f"{settings.supabase_url}/rest/v1/traces",
-            params={"id": f"eq.{card['trace_id']}", "select": "*"},
-            headers=headers,
-        )
-        trace_data = trace_resp.json()[0] if trace_resp.status_code == 200 and trace_resp.json() else {}
+    trace_resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/traces",
+        params={"id": f"eq.{card['trace_id']}", "select": "*"},
+        headers=headers,
+    )
+    trace_data = trace_resp.json()[0] if trace_resp.status_code == 200 and trace_resp.json() else {}
 
     code = trace_data.get("code", "")
     steps = trace_data.get("steps", "[]")

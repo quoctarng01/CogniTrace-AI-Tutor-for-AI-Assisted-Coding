@@ -278,6 +278,10 @@ export function CodeEditor({
           glyphMargin: true,
           contextmenu: !readOnly,
           renderWhitespace: 'none',
+          quickSuggestions: { other: false, comments: false, strings: false },
+          wordBasedSuggestions: 'off',
+          parameterHints: { enabled: false },
+          suggestOnTriggerCharacters: false,
         }}
         loading={<CodeEditorSkeleton />}
         onMount={handleMount}

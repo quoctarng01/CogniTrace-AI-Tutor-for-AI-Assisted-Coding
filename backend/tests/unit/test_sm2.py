@@ -79,16 +79,16 @@ class TestSM2Algorithm:
         assert new_reps == 0
         assert next_date == date.today()  # No future date for failed reviews
 
-    def test_hard_resets_interval_to_1(self):
-        """Quality = 2 should reset interval to 1."""
+    def test_hard_soft_fails_interval_and_reps(self):
+        """Quality = 2 (Hard rating) should trigger soft-fail (halved reps and interval)."""
         new_ef, new_interval, new_reps, _ = sm2_calculate(
             quality=2,
             easiness_factor=2.5,
             interval_days=15,
             repetitions=3,
         )
-        assert new_interval == 1
-        assert new_reps == 0
+        assert new_interval == 8
+        assert new_reps == 1
 
     # --- Easiness Factor bounds ---
     def test_easiness_factor_minimum_1_3(self):

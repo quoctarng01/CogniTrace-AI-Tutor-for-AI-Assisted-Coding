@@ -179,10 +179,11 @@ def run_trace(
                 pass  # Silently skip invalid initial values
 
     start_time = time.perf_counter()
+    last_time = start_time
     max_steps_reached = False
 
     def tracer_callback(frame, event, arg):
-        nonlocal prev_variables
+        nonlocal prev_variables, last_time
 
         # Only trace code in user space (<codescope>)
         if frame.f_code.co_filename != "<codescope>":
@@ -195,6 +196,12 @@ def run_trace(
 
         # Handle 'line' events — step-by-step execution
         if event == "line":
+            current_time = time.perf_counter()
+            elapsed_ms = (current_time - last_time) * 1000
+            last_time = current_time
+            if steps:
+                steps[-1].duration_ms = round(elapsed_ms, 3)
+
             bytecode_offset = frame.f_lasti
             opcode = opcode_map.get(bytecode_offset, "UNKNOWN")
             line_no = frame.f_lineno
@@ -253,6 +260,12 @@ def run_trace(
         # Handle 'return' events — capture the final state of the namespace
         # This is how list comprehensions expose their result variable
         elif event == "return":
+            current_time = time.perf_counter()
+            elapsed_ms = (current_time - last_time) * 1000
+            last_time = current_time
+            if steps:
+                steps[-1].duration_ms = round(elapsed_ms, 3)
+
             variables = _capture_variables(frame, prev_variables, namespace)
 
             step = TraceStep(
@@ -312,17 +325,11 @@ def run_trace(
         steps.append(step)
     finally:
         sys.settrace(None)
+        if steps:
+            final_elapsed_ms = (time.perf_counter() - last_time) * 1000
+            steps[-1].duration_ms = round(final_elapsed_ms, 3)
 
     duration_ms = (time.perf_counter() - start_time) * 1000
-    if steps:
-        # TODO: Replace uniform distribution with actual per-step timing.
-        # To do this, capture time.perf_counter() at the start and end of each
-        # tracer_callback invocation and store it in TraceStep.duration_ms directly.
-        # Current approach (total / count) is misleading — loops appear to take the
-        # same time as assignments.
-        per_step = duration_ms / len(steps)
-        for step in steps:
-            step.duration_ms = round(per_step, 3)
 
     serialized_steps = [_step_to_dict(s) for s in steps]
     checkpoints = generate_tutor_checkpoints(serialized_steps, source)

@@ -224,7 +224,7 @@ def _check_implicit_truthiness(node: ast.If, annotations: list[Annotation]) -> N
     annotations.append(
         Annotation(
             line=node.lineno,
-            severity="medium",
+            severity="low",
             pattern_id="implicit_truthiness",
             message=(
                 f"`if {name}:` is True for `{name}=[]`, `{name}={{}}`, "
