@@ -11,6 +11,7 @@ import type { SharedTraceData } from '@/types/user';
 import type { TraceResult } from '@/types/trace';
 import { VariablePanel } from '@/components/tracer/VariablePanel';
 import { AnimationControls } from '@/components/tracer/AnimationControls';
+import { TutorChallenge } from '@/components/tracer/TutorChallenge';
 import { useTrace } from '@/hooks/useTrace';
 import styles from './share.module.css';
 
@@ -59,6 +60,20 @@ export default function SharedTracePage() {
     setSpeed,
     reset,
   } = useTrace({ steps });
+
+  const [completedCheckpoints, setCompletedCheckpoints] = useState<Set<number>>(new Set());
+  
+  const checkpoints = traceResult?.checkpoints ?? [];
+  const activeCheckpoint = checkpoints.find(
+    (cp) => cp.step_number === currentStep && !completedCheckpoints.has(currentStep)
+  );
+
+  // Auto-pause when reaching an uncompleted checkpoint step during playback
+  useEffect(() => {
+    if (activeCheckpoint && playbackState === 'playing') {
+      pause();
+    }
+  }, [activeCheckpoint, playbackState, pause]);
 
   useEffect(() => {
     async function load() {
@@ -300,33 +315,53 @@ export default function SharedTracePage() {
           />
         </div>
         <div className={styles.rightPanel}>
-          <VariablePanel
-            variables={currentStepData?.variables ?? {}}
-            branches={currentStepData?.branches_taken ?? {}}
-            isLoading={isLoading}
-          />
+          {activeCheckpoint ? (
+            <TutorChallenge
+              checkpoint={activeCheckpoint}
+              code={code}
+              steps={steps}
+              traceId={traceResult?.trace_id}
+              onSuccess={() => setCompletedCheckpoints(prev => {
+                const next = new Set(prev);
+                next.add(currentStep);
+                return next;
+              })}
+            />
+          ) : (
+            <VariablePanel
+              variables={currentStepData?.variables ?? {}}
+              branches={currentStepData?.branches_taken ?? {}}
+              isLoading={isLoading}
+            />
+          )}
         </div>
       </main>
 
       {traceResult && steps.length > 0 && (
         <footer className={styles.footer}>
-          <AnimationControls
-            steps={steps}
-            currentStep={currentStep}
-            onStepChange={(step) => jumpToStep(step)}
-            totalSteps={steps.length}
-            durationMs={traceResult.duration_ms}
-            playbackState={playbackState}
-            speed={speed}
-            play={play}
-            pause={pause}
-            togglePlayPause={togglePlayPause}
-            stepForward={stepForward}
-            stepBackward={stepBackward}
-            jumpToStep={jumpToStep}
-            setSpeed={setSpeed}
-            reset={reset}
-          />
+          {!activeCheckpoint ? (
+            <AnimationControls
+              steps={steps}
+              currentStep={currentStep}
+              onStepChange={(step) => jumpToStep(step)}
+              totalSteps={steps.length}
+              durationMs={traceResult.duration_ms}
+              playbackState={playbackState}
+              speed={speed}
+              play={play}
+              pause={pause}
+              togglePlayPause={togglePlayPause}
+              stepForward={stepForward}
+              stepBackward={stepBackward}
+              jumpToStep={jumpToStep}
+              setSpeed={setSpeed}
+              reset={reset}
+            />
+          ) : (
+            <div style={{ width: '100%', padding: '1rem', textAlign: 'center', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontWeight: 600, borderTop: '1px solid rgba(239, 68, 68, 0.2)' }}>
+              🔒 Timeline locked by AI Tutor. Please answer the challenge question on the right to resume.
+            </div>
+          )}
         </footer>
       )}
     </div>

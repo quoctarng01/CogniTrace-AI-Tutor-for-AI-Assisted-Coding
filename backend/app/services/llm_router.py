@@ -435,7 +435,121 @@ Student Answer:
             "rating_suggestion": "good",
             "feedback": "Grading failed due to an LLM communication issue, but keep up the effort!",
         }
-    
+
+    async def diagnose_misconception(
+        self,
+        code: str,
+        checkpoint_type: str,
+        variable_name: str | None,
+        correct_value: str,
+        user_prediction: str,
+        lineno: int,
+    ) -> dict[str, Any]:
+        """
+        Diagnose a student's misconception by comparing their wrong prediction
+        with the correct interpreter state.
+        Returns a dict containing 'tag' and 'explanation'.
+        """
+        system_prompt = """You are an AI code tutor analyzing a student's mistake during a code tracing exercise.
+
+You will be given:
+1. The Python code being executed.
+2. The checkpoint type (e.g. branch_prediction, variable_prediction, exception_prediction).
+3. The specific variable name (if applicable).
+4. The correct value (interpreter's Ground Truth).
+5. The student's incorrect predicted value (their Mental Model).
+6. The line number of the executing code.
+
+Your job:
+1. Perform a misconception differential analysis. Compare the Ground Truth against the student's prediction. Determine the precise logic misconception that led to this wrong guess.
+2. Formulate a short explanation (exactly 2-3 sentences) directly addressing the student. Explain WHY their guess is incorrect by pointing to the exact variables and control flow in the code. Do not apologize or use generic greetings.
+3. Categorize the misconception into one of these strict tags:
+   - "off_by_one" (for index, loop bounds, range errors)
+   - "unexecuted_iteration" (student thought a loop ran when it didn't, or vice-versa)
+   - "none_dereference" (student assumed a None variable had attributes or contents)
+   - "state_mutation_confusion" (student didn't realize a variable mutated or thought it mutated incorrectly)
+   - "conditional_evaluation_error" (student evaluated a branch condition incorrectly)
+   - "type_confusion" (mistaking division types, list vs string operations, etc.)
+   - "general_logic_error" (fallback if none of the above fit)
+
+Your response must be a valid JSON object in this exact format:
+{
+  "tag": "state_mutation_confusion",
+  "explanation": "You predicted that 'x' would remain 5. However, line 4 mutates 'x' by adding 10 to it on this loop iteration, making it 15."
+}"""
+
+        user_content = f"""Code:
+```python
+{code}
+```
+
+Line Number: {lineno}
+Checkpoint Type: {checkpoint_type}
+Variable: {variable_name or 'N/A'}
+Interpreter Correct Value: {correct_value}
+Student Incorrect Prediction: {user_prediction}"""
+
+        # Choose provider based on config
+        pat = settings.github_models_pat
+        if pat:
+            model = settings.github_models_model or "openai/gpt-4o-mini"
+            url = "https://models.github.ai/inference/chat/completions"
+            try:
+                resp = await self._http.post(
+                    url,
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_content},
+                        ],
+                        "response_format": {"type": "json_object"},
+                    },
+                    headers={
+                        "Authorization": f"Bearer {pat}",
+                        "Content-Type": "application/json",
+                    },
+                )
+                if resp.status_code == 200:
+                    try:
+                        return json.loads(resp.json()["choices"][0]["message"]["content"])
+                    except Exception as e:
+                        logger.error(f"Failed to parse GitHub Models diagnosis response: {e}")
+            except Exception as e:
+                logger.error(f"GitHub Models diagnosis request failed: {e}")
+
+        # Fallback to Ollama Cloud
+        if settings.ollama_cloud_url:
+            url = f"{settings.ollama_cloud_url}/chat"
+            try:
+                resp = await self._http.post(
+                    url,
+                    json={
+                        "model": settings.ollama_model or "llama3.2",
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_content},
+                        ],
+                        "stream": False,
+                        "format": "json",
+                    },
+                    headers={"Content-Type": "application/json"},
+                )
+                if resp.status_code == 200:
+                    try:
+                        content = resp.json()["message"]["content"]
+                        return json.loads(content)
+                    except Exception as e:
+                        logger.error(f"Failed to parse Ollama diagnosis response: {e}")
+            except Exception as e:
+                logger.error(f"Ollama diagnosis request failed: {e}")
+
+        # Safe fallback
+        return {
+            "tag": "general_logic_error",
+            "explanation": "Your prediction was different from the interpreter state. Trace the logic line-by-line to see where the values diverged.",
+        }
+
     # ── Cache Layer ───────────────────────────────────────────────
     
     async def _get_cached(self, cache_key: str) -> Optional[str]:
@@ -501,6 +615,191 @@ Student Answer:
                 )
         except Exception as e:
             logger.warning("cache_store_failed", extra={"error": str(e)})
+
+    async def generate_code_repair_challenge(
+        self,
+        original_code: str,
+        misconception_tag: str,
+    ) -> str:
+        """
+        Generate a dynamic programming challenge targeting a specific misconception
+        inspired by the student's original trace code.
+        """
+        system_prompt = """You are an AI code tutor generating a custom practice challenge for a student.
+The student recently struggled with a misconception of type: '{tag}' while tracing the provided code.
+
+Your job:
+1. Synthesize a brand new, short (5-10 lines), complete Python function.
+2. Inject a logical bug into this new function that directly matches the misconception tag '{tag}' (e.g. an off-by-one index error, mutable default argument issue, none check bypass, etc.).
+3. Add a concise prompt comment at the top explaining what the function is supposed to do, and instructing the student to spot the bug and write the corrected code.
+4. Keep the output extremely clean, returning ONLY the python code with the prompt comment. Do not wrap in markdown or explain the answer.
+
+Example Output format:
+# TUTOR CHALLENGE: The function below is supposed to find the first even number in a list.
+# Spot the bug (unexecuted iteration error) and write the corrected code.
+def first_even(nums):
+    for n in nums:
+        if n % 2 == 0:
+            return n
+    return -1
+"""
+
+        user_content = f"Original Trace Code:\n```python\n{original_code}\n```\n\nMisconception Tag: {misconception_tag}"
+
+        # Choose provider
+        pat = settings.github_models_pat
+        if pat:
+            model = settings.github_models_model or "openai/gpt-4o-mini"
+            url = "https://models.github.ai/inference/chat/completions"
+            try:
+                resp = await self._http.post(
+                    url,
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt.format(tag=misconception_tag)},
+                            {"role": "user", "content": user_content},
+                        ],
+                    },
+                    headers={
+                        "Authorization": f"Bearer {pat}",
+                        "Content-Type": "application/json",
+                    },
+                )
+                if resp.status_code == 200:
+                    return resp.json()["choices"][0]["message"]["content"].strip()
+            except Exception as e:
+                logger.error(f"GitHub Models generate challenge failed: {e}")
+
+        # Fallback to Ollama Cloud
+        if settings.ollama_cloud_url:
+            url = f"{settings.ollama_cloud_url}/chat"
+            try:
+                resp = await self._http.post(
+                    url,
+                    json={
+                        "model": settings.ollama_model or "llama3.2",
+                        "messages": [
+                            {"role": "system", "content": system_prompt.format(tag=misconception_tag)},
+                            {"role": "user", "content": user_content},
+                        ],
+                        "stream": False,
+                    },
+                    headers={"Content-Type": "application/json"},
+                )
+                if resp.status_code == 200:
+                    return resp.json()["message"]["content"].strip()
+            except Exception as e:
+                logger.error(f"Ollama generate challenge failed: {e}")
+
+        # Default fallback code snippet
+        return f"""# TUTOR CHALLENGE: Spot and fix the {misconception_tag.replace('_', ' ')} error below.
+# Write the corrected code.
+def fix_me(items):
+    # Bug related to {misconception_tag} is present here
+    return items
+"""
+
+    async def grade_code_repair(
+        self,
+        original_code: str,
+        misconception_tag: str,
+        user_fix: str,
+    ) -> dict[str, Any]:
+        """
+        Grade the student's code repair attempt targeting a specific misconception.
+        """
+        system_grader_prompt = f"""You are an AI code tutor grading a student's submission for a "Code Repair Challenge".
+The student recently struggled with a misconception of type: '{misconception_tag}'.
+They were given a practice code snippet containing a bug matching that misconception, and they have submitted their corrected code version.
+
+Your job:
+1. Determine if the student's corrected code successfully resolves the logical bug related to '{misconception_tag}'.
+2. Assign an integer score from 0 to 100 representing the accuracy of their fix.
+3. Suggest a review rating:
+   - "again" (score < 60): failed to fix the bug, wrote invalid code, or left it blank.
+   - "hard" (score 60-79): partially fixed the bug but introduced another issue or missed corner cases.
+   - "good" (score 80-94): correct fix with slight inefficiencies.
+   - "easy" (score 95-100): perfect, clean correction of the bug.
+4. Provide a friendly, constructive 2-3 sentence feedback explaining what they got right and what (if anything) they missed. Do not repeat the prompt.
+
+Your response must be a valid JSON object in this exact format:
+{{
+  "score": 90,
+  "rating_suggestion": "good",
+  "feedback": "Your correction successfully addresses the loop boundary check and avoids the off-by-one error by using range(len(lst)). Excellent fix!"
+}}"""
+
+        user_content = f"""Original Trace Code Reference:
+{original_code}
+
+Misconception tag: {misconception_tag}
+
+Student Corrected Code submission:
+{user_fix}"""
+
+        # Choose provider
+        pat = settings.github_models_pat
+        if pat:
+            model = settings.github_models_model or "openai/gpt-4o-mini"
+            url = "https://models.github.ai/inference/chat/completions"
+            try:
+                resp = await self._http.post(
+                    url,
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": system_grader_prompt},
+                            {"role": "user", "content": user_content},
+                        ],
+                        "response_format": {"type": "json_object"},
+                    },
+                    headers={
+                        "Authorization": f"Bearer {pat}",
+                        "Content-Type": "application/json",
+                    },
+                )
+                if resp.status_code == 200:
+                    try:
+                        return json.loads(resp.json()["choices"][0]["message"]["content"])
+                    except Exception as e:
+                        logger.error(f"Failed to parse GitHub Models grade repair response: {e}")
+            except Exception as e:
+                logger.error(f"GitHub Models grade repair request failed: {e}")
+
+        # Fallback to Ollama Cloud
+        if settings.ollama_cloud_url:
+            url = f"{settings.ollama_cloud_url}/chat"
+            try:
+                resp = await self._http.post(
+                    url,
+                    json={
+                        "model": settings.ollama_model or "llama3.2",
+                        "messages": [
+                            {"role": "system", "content": system_grader_prompt},
+                            {"role": "user", "content": user_content},
+                        ],
+                        "stream": False,
+                        "format": "json",
+                    },
+                    headers={"Content-Type": "application/json"},
+                )
+                if resp.status_code == 200:
+                    try:
+                        content = resp.json()["message"]["content"]
+                        return json.loads(content)
+                    except Exception as e:
+                        logger.error(f"Failed to parse Ollama grade repair response: {e}")
+            except Exception as e:
+                logger.error(f"Ollama grade repair request failed: {e}")
+
+        # Safe fallback
+        return {
+            "score": 75,
+            "rating_suggestion": "good",
+            "feedback": "Grading failed due to an LLM communication issue, but keep up the effort!",
+        }
+
 
 
 # Global singleton

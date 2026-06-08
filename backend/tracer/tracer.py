@@ -324,10 +324,14 @@ def run_trace(
         for step in steps:
             step.duration_ms = round(per_step, 3)
 
+    serialized_steps = [_step_to_dict(s) for s in steps]
+    checkpoints = generate_tutor_checkpoints(serialized_steps, source)
+
     result = {
-        "steps": [_step_to_dict(s) for s in steps],
+        "steps": serialized_steps,
         "total_steps": len(steps),
         "duration_ms": round(duration_ms, 2),
+        "checkpoints": checkpoints,
     }
 
     if max_steps_reached:
@@ -335,6 +339,143 @@ def run_trace(
         result["message"] = f"Execution stopped after {max_steps} steps"
 
     return result
+
+
+def generate_tutor_checkpoints(steps: list[dict], code: str) -> list[dict]:
+    checkpoints = []
+    
+    # We want at most 2 checkpoints: prefer exception first, then conditional, then variable mutation
+    exception_cp = None
+    branch_cp = None
+    var_cp = None
+    
+    for i, s in enumerate(steps):
+        # 1. Check for exception at step s
+        if s.get("exception_info") and i > 0:
+            exc_info = s["exception_info"]
+            exc_name = exc_info.split(":")[0].strip() if ":" in exc_info else "an Exception"
+            prev_step = steps[i - 1]
+            exception_cp = {
+                "step_number": prev_step["step_number"],
+                "line_number": prev_step["line_number"],
+                "checkpoint_type": "exception_prediction",
+                "prompt": f"Line {prev_step['line_number']} is about to run. Will this line raise a runtime exception?",
+                "options": [
+                    "No, the line will execute successfully.",
+                    f"Yes, it will raise {exc_name}."
+                ],
+                "correct_value": f"Yes, it will raise {exc_name}.",
+                "variable_name": None,
+                "meta": {
+                    "exception_info": exc_info,
+                    "exception_name": exc_name
+                }
+            }
+            # If there's an exception, this is highly educational, so break
+            break
+
+    # If no exception, look for branches and variable mutations
+    if not exception_cp:
+        for i, s in enumerate(steps):
+            # 2. Check for branch condition
+            if "if" in s.get("branches_taken", {}) and branch_cp is None:
+                if_info = s["branches_taken"]["if"]
+                taken = if_info.get("taken")
+                condition = if_info.get("condition", "condition")
+                
+                # Check next step to verify where it goes
+                correct_option = "True (enter the branch block)" if taken else "False (skip the branch block)"
+                branch_cp = {
+                    "step_number": s["step_number"],
+                    "line_number": s["line_number"],
+                    "checkpoint_type": "branch_prediction",
+                    "prompt": f"Line {s['line_number']} is an 'if' condition: `{condition}`. Will it evaluate to True?",
+                    "options": [
+                        "True (enter the branch block)",
+                        "False (skip the branch block)"
+                    ],
+                    "correct_value": correct_option,
+                    "variable_name": None,
+                    "meta": {
+                        "condition": condition,
+                        "taken": taken
+                    }
+                }
+                
+            # 3. Check for variable mutation (where changed is True)
+            if i > 0 and var_cp is None:
+                prev_step = steps[i - 1]
+                # Look for a variable that changed in step s
+                for var_name, var_info in s.get("variables", {}).items():
+                    if var_info.get("changed"):
+                        prev_info = prev_step.get("variables", {}).get(var_name)
+                        if prev_info:
+                            curr_val = var_info["value"]
+                            prev_val = prev_info["value"]
+                            var_type = var_info["type"]
+                            
+                            # Generate unique options
+                            options = [curr_val]
+                            if prev_val not in options:
+                                options.append(prev_val)
+                            
+                            # Type-specific wrong options
+                            if var_type in ("int", "float"):
+                                try:
+                                    num_val = float(curr_val)
+                                    val_1 = str(int(num_val + 1)) if num_val.is_integer() else f"{num_val + 1:.1f}"
+                                    val_2 = "0"
+                                    if val_1 not in options:
+                                        options.append(val_1)
+                                    if val_2 not in options:
+                                        options.append(val_2)
+                                except ValueError:
+                                    pass
+                            elif var_type == "bool":
+                                options = ["True", "False"]
+                            elif var_type == "list":
+                                if "[]" not in options:
+                                    options.append("[]")
+                                if "None" not in options:
+                                    options.append("None")
+                            
+                            # Ensure we have at least 3 options, up to 4
+                            while len(options) < 3:
+                                options.append("None")
+                            
+                            # Remove duplicates and shuffle remaining options
+                            options = list(set(options))
+                            # Ensure correct option is there
+                            if curr_val not in options:
+                                options.append(curr_val)
+                            
+                            var_cp = {
+                                "step_number": prev_step["step_number"],
+                                "line_number": prev_step["line_number"],
+                                "checkpoint_type": "variable_prediction",
+                                "prompt": f"Line {s['line_number']} is about to run. What will be the value of `{var_name}` after this line?",
+                                "options": options,
+                                "correct_value": curr_val,
+                                "variable_name": var_name,
+                                "meta": {
+                                    "var_type": var_type,
+                                    "prev_value": prev_val,
+                                    "correct_value": curr_val
+                                }
+                            }
+                            break
+
+    # Build the final checkpoints list
+    if exception_cp:
+        checkpoints.append(exception_cp)
+    if branch_cp:
+        checkpoints.append(branch_cp)
+    if var_cp and len(checkpoints) < 2:
+        checkpoints.append(var_cp)
+        
+    # Sort checkpoints by step_number
+    checkpoints.sort(key=lambda x: x["step_number"])
+    return checkpoints
 
 
 def _step_to_dict(step: TraceStep) -> dict:

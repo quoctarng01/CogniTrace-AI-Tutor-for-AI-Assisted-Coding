@@ -21,6 +21,7 @@ export interface ReviewCard {
   repetitions: number;
   due: boolean;
   trace?: SavedTrace & { steps?: TraceStep[] };
+  code_repair_challenge?: string | null;
 }
 
 export interface DashboardData {
@@ -58,6 +59,7 @@ export interface ReviewCardDetail {
   repetitions: number;
   due: boolean;
   trace: SavedTrace & { steps: TraceStep[] };
+  code_repair_challenge?: string | null;
 }
 
 /** Shared trace with embedded steps — returned by GET /api/traces/shared/{share_token} */

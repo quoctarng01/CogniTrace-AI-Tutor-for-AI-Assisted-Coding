@@ -104,3 +104,43 @@ async def test_grade_explanation_success():
             args, kwargs = mock_post.call_args
             assert "json" in kwargs
             assert kwargs["json"]["response_format"] == {"type": "json_object"}
+
+
+@pytest.mark.asyncio
+async def test_diagnose_misconception_success():
+    """Verify that diagnose_misconception calls LLM and returns tag and explanation."""
+    router = LLMRouter()
+    
+    with patch("app.services.llm_router.settings") as mock_settings:
+        mock_settings.github_models_pat = "mock_pat"
+        mock_settings.github_models_model = "mock_model"
+        
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        mock_response.json = lambda: {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"tag": "state_mutation_confusion", "explanation": "x mutated."}'
+                    }
+                }
+            ]
+        }
+        
+        with patch.object(router._http, "post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_response
+            
+            result = await router.diagnose_misconception(
+                code="x = 5\nx = 10",
+                checkpoint_type="variable_prediction",
+                variable_name="x",
+                correct_value="10",
+                user_prediction="5",
+                lineno=2
+            )
+            
+            assert result["tag"] == "state_mutation_confusion"
+            assert result["explanation"] == "x mutated."
+            
+            mock_post.assert_called_once()
+

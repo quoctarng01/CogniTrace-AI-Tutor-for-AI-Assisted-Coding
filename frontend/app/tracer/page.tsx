@@ -16,6 +16,7 @@ import { ExplanationPanel } from '@/components/llm/ExplanationPanel';
 import { WhatIfModal } from '@/components/tracer/WhatIfModal';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { TraceTreePanel } from '@/components/tracer/TraceTreePanel';
+import { TutorChallenge } from '@/components/tracer/TutorChallenge';
 import {
   EditorErrorBoundary,
   VariablePanelErrorBoundary,
@@ -115,6 +116,20 @@ export default function TracerPage() {
     setSpeed,
     reset,
   } = useTrace({ steps });
+
+  const [completedCheckpoints, setCompletedCheckpoints] = useState<Set<number>>(new Set());
+  
+  const checkpoints = traceResult?.checkpoints ?? [];
+  const activeCheckpoint = checkpoints.find(
+    (cp) => cp.step_number === currentStep && !completedCheckpoints.has(currentStep)
+  );
+
+  // Auto-pause when reaching an uncompleted checkpoint step during playback
+  useEffect(() => {
+    if (activeCheckpoint && playbackState === 'playing') {
+      pause();
+    }
+  }, [activeCheckpoint, playbackState, pause]);
 
   const handleSelectStep = useCallback(
     (stepIdx: number) => {
@@ -382,11 +397,25 @@ export default function TracerPage() {
               {/* Variable panel */}
               <div className={styles.variablePanel}>
                 <VariablePanelErrorBoundary>
-                  <VariablePanel
-                    variables={currentStepData?.variables ?? {}}
-                    branches={currentStepData?.branches_taken ?? {}}
-                    isLoading={isLoading}
-                  />
+                  {activeCheckpoint ? (
+                    <TutorChallenge
+                      checkpoint={activeCheckpoint}
+                      code={code}
+                      steps={steps}
+                      traceId={traceResult?.trace_id}
+                      onSuccess={() => setCompletedCheckpoints(prev => {
+                        const next = new Set(prev);
+                        next.add(currentStep);
+                        return next;
+                      })}
+                    />
+                  ) : (
+                    <VariablePanel
+                      variables={currentStepData?.variables ?? {}}
+                      branches={currentStepData?.branches_taken ?? {}}
+                      isLoading={isLoading}
+                    />
+                  )}
                 </VariablePanelErrorBoundary>
               </div>
 
@@ -424,47 +453,53 @@ export default function TracerPage() {
       {/* Bottom controls */}
       {traceResult && steps.length > 0 && (
         <footer className={styles.footer}>
-          <AnimationControls
-            steps={steps}
-            currentStep={currentStep}
-            onStepChange={jumpToStep}
-            totalSteps={steps.length}
-            durationMs={traceResult.duration_ms}
-            playbackState={playbackState}
-            speed={speed}
-            play={() => {
-              play();
-              trackEvent('trace_playback_started', { current_step: currentStep });
-            }}
-            pause={() => {
-              pause();
-              trackEvent('trace_playback_paused', { current_step: currentStep });
-            }}
-            togglePlayPause={() => {
-              togglePlayPause();
-              trackEvent('trace_playback_toggled', { current_step: currentStep, state: playbackState });
-            }}
-            stepForward={() => {
-              stepForward();
-              trackEvent('trace_step_navigated', { direction: 'forward', current_step: currentStep + 1 });
-            }}
-            stepBackward={() => {
-              stepBackward();
-              trackEvent('trace_step_navigated', { direction: 'backward', current_step: currentStep - 1 });
-            }}
-            jumpToStep={(step) => {
-              jumpToStep(step);
-              trackEvent('trace_step_jumped', { step });
-            }}
-            setSpeed={(newSpeed) => {
-              setSpeed(newSpeed);
-              trackEvent('trace_speed_changed', { speed: newSpeed });
-            }}
-            reset={() => {
-              reset();
-              trackEvent('trace_reset');
-            }}
-          />
+          {!activeCheckpoint ? (
+            <AnimationControls
+              steps={steps}
+              currentStep={currentStep}
+              onStepChange={jumpToStep}
+              totalSteps={steps.length}
+              durationMs={traceResult.duration_ms}
+              playbackState={playbackState}
+              speed={speed}
+              play={() => {
+                play();
+                trackEvent('trace_playback_started', { current_step: currentStep });
+              }}
+              pause={() => {
+                pause();
+                trackEvent('trace_playback_paused', { current_step: currentStep });
+              }}
+              togglePlayPause={() => {
+                togglePlayPause();
+                trackEvent('trace_playback_toggled', { current_step: currentStep, state: playbackState });
+              }}
+              stepForward={() => {
+                stepForward();
+                trackEvent('trace_step_navigated', { direction: 'forward', current_step: currentStep + 1 });
+              }}
+              stepBackward={() => {
+                stepBackward();
+                trackEvent('trace_step_navigated', { direction: 'backward', current_step: currentStep - 1 });
+              }}
+              jumpToStep={(step) => {
+                jumpToStep(step);
+                trackEvent('trace_step_jumped', { step });
+              }}
+              setSpeed={(newSpeed) => {
+                setSpeed(newSpeed);
+                trackEvent('trace_speed_changed', { speed: newSpeed });
+              }}
+              reset={() => {
+                reset();
+                trackEvent('trace_reset');
+              }}
+            />
+          ) : (
+            <div style={{ width: '100%', padding: '1rem', textAlign: 'center', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontWeight: 600, borderTop: '1px solid rgba(239, 68, 68, 0.2)' }}>
+              🔒 Timeline locked by AI Tutor. Please answer the challenge question on the right to resume.
+            </div>
+          )}
           <div className={styles.lineActions}>
             {compareMode ? (
               <button

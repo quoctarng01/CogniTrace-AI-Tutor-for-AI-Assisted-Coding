@@ -92,6 +92,7 @@ class TraceResponse(BaseModel):
     steps: list[TraceStepResponse]
     total_steps: int
     duration_ms: float
+    checkpoints: list[dict] = []
 
 
 def _rate_limit(rate: str):
@@ -215,6 +216,7 @@ async def run_trace(req: TraceRequest, authorization: str = Header(None), reques
         steps=[TraceStepResponse(**s) for s in result["steps"]],
         total_steps=result["total_steps"],
         duration_ms=result["duration_ms"],
+        checkpoints=result.get("checkpoints", []),
     )
 
 

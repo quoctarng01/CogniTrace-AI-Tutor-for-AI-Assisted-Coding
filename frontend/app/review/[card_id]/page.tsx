@@ -91,7 +91,11 @@ export default function ReviewPage() {
       try {
         const loadedCard = await fetchReviewCard(cardId);
         setCard(loadedCard);
-        setReviewState('playing');
+        if (loadedCard.code_repair_challenge) {
+          setReviewState('active_recall');
+        } else {
+          setReviewState('playing');
+        }
       } catch (err) {
         if (err instanceof Error && err.message === 'CARD_NOT_FOUND') {
           setError('Card not found. It may have already been reviewed.');
@@ -211,9 +215,9 @@ export default function ReviewPage() {
         <div className={styles.editorSection}>
           {card ? (
             <CodeEditor
-              code={card.trace.code}
+              code={card.code_repair_challenge ?? card.trace.code}
               onChange={() => {}}
-              currentLine={currentStepData?.line_number ?? 1}
+              currentLine={card.code_repair_challenge ? undefined : (currentStepData?.line_number ?? 1)}
               readOnly
             />
           ) : (
@@ -264,13 +268,21 @@ export default function ReviewPage() {
         {/* Active Recall textbox */}
         {reviewState === 'active_recall' && (
           <div className={styles.activeRecallPanel}>
-            <h2 className={styles.ratingTitle}>Active Recall Challenge</h2>
+            <h2 className={styles.ratingTitle}>
+              {card?.code_repair_challenge ? 'Tutor Challenge: Code Repair' : 'Active Recall Challenge'}
+            </h2>
             <p className={styles.recallLabel}>
-              Explain step-by-step how this code executed and why variables updated the way they did.
+              {card?.code_repair_challenge
+                ? 'Spot the logical bug in the code on the left and write the corrected Python code below.'
+                : 'Explain step-by-step how this code executed and why variables updated the way they did.'}
             </p>
             <textarea
               className={styles.recallTextarea}
-              placeholder="Type your explanation here... (e.g., n started at 8, we looped until it was 1...)"
+              placeholder={
+                card?.code_repair_challenge
+                  ? 'Paste or write the corrected code here...'
+                  : 'Type your explanation here... (e.g., n started at 8, we looped until it was 1...)'
+              }
               value={activeRecallText}
               onChange={(e) => setActiveRecallText(e.target.value)}
             />

@@ -10,11 +10,13 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Header, Request
 from sse_starlette.sse import EventSourceResponse
+from pydantic import BaseModel
 
 from app.services.llm_router import llm_router, LLMProvider
 from app.services.rate_limit import check_rate_limit
 from app.config import settings
-from app.dependencies import is_pro_user
+from app.dependencies import is_pro_user, get_profile_id_for_user
+from app.routers.auth import get_current_user
 
 logger = logging.getLogger("codescope.llm")
 
@@ -137,4 +139,112 @@ async def stream_explanation(
             )
     
     return EventSourceResponse(event_generator())
+
+
+class DiagnoseRequest(BaseModel):
+    code: str
+    checkpoint_type: str
+    variable_name: Optional[str] = None
+    correct_value: str
+    user_prediction: str
+    line_number: int
+    trace_id: Optional[str] = None
+    steps: Optional[list] = None
+
+
+@router.post("/diagnose")
+async def diagnose_checkpoint_error(
+    req: DiagnoseRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Diagnose a student's incorrect state prediction.
+    If authenticated, automatically creates a trace and review_card targeting the misconception.
+    """
+    # 1. Run the LLM mismatch diagnosis
+    diagnosis = await llm_router.diagnose_misconception(
+        code=req.code,
+        checkpoint_type=req.checkpoint_type,
+        variable_name=req.variable_name,
+        correct_value=req.correct_value,
+        user_prediction=req.user_prediction,
+        lineno=req.line_number,
+    )
+    
+    tag = diagnosis.get("tag", "general_logic_error")
+    explanation = diagnosis.get("explanation", "Logic mismatch detected.")
+
+    # 2. If user is authenticated, create review_card for this misconception
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            import secrets
+            from datetime import date, timedelta
+            
+            token = authorization[7:]
+            user = await get_current_user(authorization)
+            user_id = user.get("id", "")
+            profile_id = await get_profile_id_for_user(user_id)
+            
+            if profile_id:
+                trace_id = req.trace_id
+                
+                # If trace_id is not provided but we have steps, save the trace first
+                if not trace_id and req.steps:
+                    share_token = secrets.token_hex(16)
+                    trace_data = {
+                        "user_id": profile_id,
+                        "code": req.code,
+                        "language": "python",
+                        "concept_tags": [tag],
+                        "is_public": False,
+                        "share_token": share_token,
+                        "steps": req.steps,
+                    }
+                    
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        resp = await client.post(
+                            f"{settings.supabase_url}/rest/v1/traces",
+                            headers={
+                                "Authorization": f"Bearer {settings.supabase_service_key}",
+                                "apikey": settings.supabase_service_key,
+                                "Content-Type": "application/json",
+                                "Prefer": "return=representation",
+                            },
+                            json=trace_data,
+                        )
+                        if resp.status_code in (200, 201):
+                            data = resp.json()
+                            trace_id = data[0].get("id") if isinstance(data, list) else data.get("id")
+                
+                # Now create the review card associated with this trace and misconception tag
+                if trace_id:
+                    next_review = (date.today() + timedelta(days=1)).isoformat()
+                    card_data = {
+                        "user_id": profile_id,
+                        "trace_id": trace_id,
+                        "concept_tag": tag,
+                        "easiness_factor": 2.5,
+                        "interval_days": 1,
+                        "repetitions": 0,
+                        "next_review_date": next_review,
+                    }
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        await client.post(
+                            f"{settings.supabase_url}/rest/v1/review_cards",
+                            headers={
+                                "Authorization": f"Bearer {settings.supabase_service_key}",
+                                "apikey": settings.supabase_service_key,
+                                "Content-Type": "application/json",
+                                "Prefer": "return=minimal",
+                            },
+                            json=card_data,
+                        )
+                        logger.info("review_card_created_for_misconception", extra={"tag": tag, "profile_id": profile_id})
+        except Exception as e:
+            logger.error("failed_to_create_misconception_review_card", extra={"error": str(e)})
+
+    return {
+        "tag": tag,
+        "explanation": explanation,
+    }
 

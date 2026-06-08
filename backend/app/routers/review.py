@@ -148,6 +148,7 @@ class ReviewCardResponse(BaseModel):
     repetitions: int
     due: bool = False
     trace: Optional[dict] = None
+    code_repair_challenge: Optional[str] = None
 
 class DueReviewsResponse(BaseModel):
     cards: list[ReviewCardResponse]
@@ -248,10 +249,32 @@ async def get_review_card(
 
     steps = json.loads(trace_data.get("steps", "[]")) if trace_data.get("steps") else []
 
+    concept_tag = card.get("concept_tag", "")
+    code_repair_challenge = None
+    MISCONCEPTION_TAGS = {
+        "off_by_one",
+        "unexecuted_iteration",
+        "none_dereference",
+        "state_mutation_confusion",
+        "conditional_evaluation_error",
+        "type_confusion",
+        "general_logic_error"
+    }
+    
+    if concept_tag in MISCONCEPTION_TAGS:
+        from app.services.llm_router import llm_router
+        try:
+            code_repair_challenge = await llm_router.generate_code_repair_challenge(
+                original_code=trace_data.get("code", ""),
+                misconception_tag=concept_tag
+            )
+        except Exception as e:
+            logger.error("failed_to_generate_code_repair_challenge", extra={"error": str(e)})
+
     return ReviewCardResponse(
         id=card["id"],
         trace_id=card["trace_id"],
-        concept_tag=card.get("concept_tag", ""),
+        concept_tag=concept_tag,
         next_review_date=card.get("next_review_date", ""),
         interval_days=card.get("interval_days", 1),
         easiness_factor=card.get("easiness_factor", 2.5),
@@ -261,6 +284,7 @@ async def get_review_card(
             **trace_data,
             "steps": steps,
         },
+        code_repair_challenge=code_repair_challenge,
     )
 
 
@@ -399,7 +423,20 @@ async def grade_review_card(
     else:
         steps_json = steps
 
-    # Grade user answer via LLM
+    concept_tag = card.get("concept_tag", "")
+    MISCONCEPTION_TAGS = {
+        "off_by_one",
+        "unexecuted_iteration",
+        "none_dereference",
+        "state_mutation_confusion",
+        "conditional_evaluation_error",
+        "type_confusion",
+        "general_logic_error"
+    }
+
     from app.services.llm_router import llm_router
-    result = await llm_router.grade_explanation(code, steps_json, req.user_answer)
+    if concept_tag in MISCONCEPTION_TAGS:
+        result = await llm_router.grade_code_repair(code, concept_tag, req.user_answer)
+    else:
+        result = await llm_router.grade_explanation(code, steps_json, req.user_answer)
     return result

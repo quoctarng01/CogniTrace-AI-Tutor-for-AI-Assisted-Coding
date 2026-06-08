@@ -29,6 +29,17 @@ export interface TraceStep {
   exception_info?: string;
 }
 
+export interface TraceCheckpoint {
+  step_number: number;
+  line_number: number;
+  checkpoint_type: 'branch_prediction' | 'variable_prediction' | 'exception_prediction';
+  prompt: string;
+  options: string[];
+  correct_value: string;
+  variable_name: string | null;
+  meta: Record<string, any>;
+}
+
 export interface TraceResult {
   trace_id: string;
   steps: TraceStep[];
@@ -36,6 +47,7 @@ export interface TraceResult {
   duration_ms: number;
   error?: string;
   error_message?: string;
+  checkpoints?: TraceCheckpoint[];
 }
 
 // Type badge colors
