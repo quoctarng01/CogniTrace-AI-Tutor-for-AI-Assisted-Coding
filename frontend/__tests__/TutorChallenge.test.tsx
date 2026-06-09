@@ -112,7 +112,10 @@ describe('TutorChallenge', () => {
     );
 
     const callArgs = vi.mocked(authFetch).mock.calls[0];
-    const bodyObj = JSON.parse(callArgs[1]?.body as string);
+    if (!callArgs || !callArgs[1]) {
+      throw new Error('Expected authFetch to be called with arguments');
+    }
+    const bodyObj = JSON.parse(callArgs[1].body as string);
     expect(bodyObj).toEqual({
       code: 'x = 10',
       checkpoint_type: 'variable_prediction',
