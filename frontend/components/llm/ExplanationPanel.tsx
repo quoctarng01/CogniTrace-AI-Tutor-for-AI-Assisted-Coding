@@ -29,6 +29,8 @@ export function ExplanationPanel({
   const [isLocalMode, setIsLocalMode] = useState(false);
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
   const [showOllamaHelp, setShowOllamaHelp] = useState(false);
+  const [customPat, setCustomPat] = useState('');
+  const [patSaveStatus, setPatSaveStatus] = useState('');
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -40,6 +42,9 @@ export function ExplanationPanel({
           if (plan === 'free') {
             setIsLocalMode(true);
           }
+          if (profile.github_models_pat) {
+            setCustomPat(profile.github_models_pat);
+          }
         })
         .catch(err => {
           console.error('Failed to fetch profile plan:', err);
@@ -49,6 +54,18 @@ export function ExplanationPanel({
       setIsLocalMode(true);
     }
   }, [isAuthenticated, token]);
+
+  const handleSavePat = useCallback(async () => {
+    try {
+      setPatSaveStatus('Saving...');
+      await api.updateProfile({ github_models_pat: customPat.trim() || null });
+      setPatSaveStatus('Saved successfully!');
+      setTimeout(() => setPatSaveStatus(''), 3000);
+    } catch (err) {
+      console.error('Failed to save PAT:', err);
+      setPatSaveStatus('Failed to save key.');
+    }
+  }, [customPat]);
 
   const submitRating = useCallback(async (stars: number) => {
     setRating(stars);
@@ -116,10 +133,42 @@ export function ExplanationPanel({
         </button>
       </div>
 
-      {/* Free Plan Cloud Warning */}
-      {userPlan === 'free' && !isLocalMode && (
-        <div className={styles.freePlanWarning}>
-          ℹ️ <strong>Free Plan limits apply</strong>. Cloud AI has rate limits. Log in to a whitelisted examiner account or switch to **Local AI** for unlimited, free usage.
+      {/* Free Plan Cloud Warning & Custom PAT option */}
+      {!isLocalMode && (
+        <div className={styles.localConfig}>
+          {userPlan === 'free' && (
+            <div className={styles.freePlanWarning} style={{ margin: '0 0 10px 0' }}>
+              ℹ️ <strong>Free Plan limits apply</strong>. Cloud AI has rate limits. Log in to a whitelisted examiner account or add your **GitHub PAT** below to bypass limits.
+            </div>
+          )}
+          {isAuthenticated ? (
+            <>
+              <div className={styles.endpointField}>
+                <label className={styles.endpointLabel}>GitHub PAT:</label>
+                <input
+                  type="password"
+                  value={customPat}
+                  onChange={e => setCustomPat(e.target.value)}
+                  className={styles.endpointInput}
+                  placeholder="Paste custom ghp_... API key"
+                  disabled={isLoading}
+                />
+              </div>
+              <button
+                type="button"
+                className={styles.saveBtn}
+                onClick={handleSavePat}
+                disabled={isLoading}
+              >
+                Save Key
+              </button>
+              {patSaveStatus && <span className={styles.saveStatus}>{patSaveStatus}</span>}
+            </>
+          ) : (
+            <div className={styles.freePlanWarning} style={{ margin: 0 }}>
+              💡 Sign in to set a custom **GitHub PAT** key and bypass standard rate limits.
+            </div>
+          )}
         </div>
       )}
 
