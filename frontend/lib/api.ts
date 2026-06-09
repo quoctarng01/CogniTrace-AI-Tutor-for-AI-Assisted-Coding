@@ -250,7 +250,7 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
 // ── Dashboard / Traces ─────────────────────────────────────────
 
 export async function fetchDashboard(): Promise<DashboardData> {
-  const res = await authFetch(`${getApiBase()}/traces`);
+  const res = await authFetch(`${getApiBase()}/dashboard`);
   throwOnStatus(res, 'dashboard');
   return res.json();
 }
