@@ -272,7 +272,16 @@ async def get_review_card(
     )
     trace_data = trace_resp.json()[0] if trace_resp.status_code == 200 and trace_resp.json() else {}
 
-    steps = json.loads(trace_data.get("steps", "[]")) if trace_data.get("steps") else []
+    steps_raw = trace_data.get("steps")
+    if isinstance(steps_raw, list):
+        steps = steps_raw
+    elif isinstance(steps_raw, str):
+        try:
+            steps = json.loads(steps_raw)
+        except json.JSONDecodeError:
+            steps = []
+    else:
+        steps = []
 
     concept_tag = card.get("concept_tag", "")
     code_repair_challenge = None
