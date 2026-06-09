@@ -322,6 +322,77 @@ async def get_review_card(
     )
 
 
+class GradeRequest(BaseModel):
+    card_id: str
+    user_answer: str
+
+
+@router.post("/grade")
+async def grade_review_card(
+    req: GradeRequest,
+    request: Request = None,
+    authorization: str = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """Grade a user's typed explanation for active recall review."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authentication required")
+        
+    user = await get_current_user(request, authorization)
+    user_id = user.get("id", "")
+    profile_id = await get_profile_id_for_user(user_id, client)
+    if not profile_id:
+        raise HTTPException(status_code=404, detail="User profile not found")
+
+    # Fetch card and trace details from Supabase
+    headers = {
+        "Authorization": f"Bearer {authorization[7:]}",
+        "apikey": settings.supabase_service_key,
+    }
+    card_resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/review_cards",
+        params={"id": f"eq.{req.card_id}", "user_id": f"eq.{profile_id}", "select": "*"},
+        headers=headers,
+    )
+    cards = card_resp.json() if card_resp.status_code == 200 else []
+    if not cards:
+        raise HTTPException(status_code=404, detail="Card not found")
+    card = cards[0]
+
+    trace_resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/traces",
+        params={"id": f"eq.{card['trace_id']}", "select": "*"},
+        headers=headers,
+    )
+    trace_data = trace_resp.json()[0] if trace_resp.status_code == 200 and trace_resp.json() else {}
+
+    code = trace_data.get("code", "")
+    steps = trace_data.get("steps", "[]")
+    
+    if not isinstance(steps, str):
+        steps_json = json.dumps(steps)
+    else:
+        steps_json = steps
+
+    concept_tag = card.get("concept_tag", "")
+    MISCONCEPTION_TAGS = {
+        "off_by_one",
+        "unexecuted_iteration",
+        "none_dereference",
+        "state_mutation_confusion",
+        "conditional_evaluation_error",
+        "type_confusion",
+        "general_logic_error"
+    }
+
+    from app.services.llm_router import llm_router
+    if concept_tag in MISCONCEPTION_TAGS:
+        result = await llm_router.grade_code_repair(code, concept_tag, req.user_answer)
+    else:
+        result = await llm_router.grade_explanation(code, steps_json, req.user_answer)
+    return result
+
+
 @router.post("/{card_id}")
 async def submit_review(
     card_id: str,
@@ -403,74 +474,3 @@ async def submit_review(
         "new_repetitions": new_reps,
         "next_review_date": next_date.isoformat(),
     }
-
-
-class GradeRequest(BaseModel):
-    card_id: str
-    user_answer: str
-
-
-@router.post("/grade")
-async def grade_review_card(
-    req: GradeRequest,
-    request: Request = None,
-    authorization: str = Header(None),
-    client: httpx.AsyncClient = Depends(get_http_client),
-):
-    """Grade a user's typed explanation for active recall review."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authentication required")
-        
-    user = await get_current_user(request, authorization)
-    user_id = user.get("id", "")
-    profile_id = await get_profile_id_for_user(user_id, client)
-    if not profile_id:
-        raise HTTPException(status_code=404, detail="User profile not found")
-
-    # Fetch card and trace details from Supabase
-    headers = {
-        "Authorization": f"Bearer {authorization[7:]}",
-        "apikey": settings.supabase_service_key,
-    }
-    card_resp = await client.get(
-        f"{settings.supabase_url}/rest/v1/review_cards",
-        params={"id": f"eq.{req.card_id}", "user_id": f"eq.{profile_id}", "select": "*"},
-        headers=headers,
-    )
-    cards = card_resp.json() if card_resp.status_code == 200 else []
-    if not cards:
-        raise HTTPException(status_code=404, detail="Card not found")
-    card = cards[0]
-
-    trace_resp = await client.get(
-        f"{settings.supabase_url}/rest/v1/traces",
-        params={"id": f"eq.{card['trace_id']}", "select": "*"},
-        headers=headers,
-    )
-    trace_data = trace_resp.json()[0] if trace_resp.status_code == 200 and trace_resp.json() else {}
-
-    code = trace_data.get("code", "")
-    steps = trace_data.get("steps", "[]")
-    
-    if not isinstance(steps, str):
-        steps_json = json.dumps(steps)
-    else:
-        steps_json = steps
-
-    concept_tag = card.get("concept_tag", "")
-    MISCONCEPTION_TAGS = {
-        "off_by_one",
-        "unexecuted_iteration",
-        "none_dereference",
-        "state_mutation_confusion",
-        "conditional_evaluation_error",
-        "type_confusion",
-        "general_logic_error"
-    }
-
-    from app.services.llm_router import llm_router
-    if concept_tag in MISCONCEPTION_TAGS:
-        result = await llm_router.grade_code_repair(code, concept_tag, req.user_answer)
-    else:
-        result = await llm_router.grade_explanation(code, steps_json, req.user_answer)
-    return result
