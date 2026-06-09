@@ -607,7 +607,10 @@ async def fork_shared_trace(
     orig_resp = await client.get(
         f"{settings.supabase_url}/rest/v1/traces",
         params={"share_token": f"eq.{share_token}", "select": "*"},
-        headers={"apikey": settings.supabase_service_key},
+        headers={
+            "Authorization": f"Bearer {settings.supabase_service_key}",
+            "apikey": settings.supabase_service_key,
+        },
     )
 
     orig_traces = orig_resp.json() if orig_resp.status_code == 200 else []

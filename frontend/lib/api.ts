@@ -86,7 +86,11 @@ export interface Profile {
  */
 function throwOnStatus(res: Response, path: string): void {
   if (res.status === 401) throw new Error('AUTH_REQUIRED');
-  if (res.status === 404) throw new Error(`${path}_NOT_FOUND`);
+  if (res.status === 404) {
+    let errKey = path.toUpperCase().replace(/\s+/g, '_');
+    if (errKey === 'REVIEW_CARD') errKey = 'CARD';
+    throw new Error(`${errKey}_NOT_FOUND`);
+  }
   if (!res.ok) throw new Error(`Failed to load ${path}: ${res.status}`);
 }
 
@@ -329,7 +333,7 @@ export async function gradeReviewExplanation(
 // ── Shared trace ────────────────────────────────────────────────
 
 export async function fetchSharedTrace(shareToken: string): Promise<SharedTraceData> {
-  const res = await fetch(`${getApiBase()}/traces/shared/${shareToken}`);
+  const res = await authFetch(`${getApiBase()}/traces/shared/${shareToken}`);
   throwOnStatus(res, 'trace');
   return res.json();
 }
