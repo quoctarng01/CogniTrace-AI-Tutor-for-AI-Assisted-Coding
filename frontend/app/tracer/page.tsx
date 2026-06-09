@@ -303,15 +303,13 @@ export default function TracerPage() {
           <span className={styles.logo}>◈</span>
           <span className={styles.brandName}>CogniTrace</span>
         </div>
-        {isAuthenticated && (
-          <button
-            className={styles.dashboardBtn}
-            onClick={() => router.push('/dashboard')}
-            title="Go to Dashboard"
-          >
-            Dashboard
-          </button>
-        )}
+        <button
+          className={styles.dashboardBtn}
+          onClick={() => router.push(isAuthenticated ? '/dashboard' : '/auth/login')}
+          title={isAuthenticated ? 'Go to Dashboard' : 'Go to Login'}
+        >
+          {isAuthenticated ? 'Dashboard' : 'Login'}
+        </button>
         <div className={styles.actions}>
           {traceResult && (
             <button
