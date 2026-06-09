@@ -38,12 +38,17 @@ def get_rate_limit(rate: str):
 
 from fastapi import Request
 
-async def get_current_user(request: Request, authorization: Optional[str] = Header(None)) -> dict:
+async def get_current_user(request: Optional[Request] = None, authorization: Optional[str] = Header(None)) -> dict:
     """
     Verify the Authorization: Bearer <token> header against Supabase.
     Returns the decoded user dict from Supabase /auth/v1/user.
     Raises HTTPException 401 if token is missing, invalid, or expired.
     """
+    # Handle callers that pass the token string as the first positional argument
+    if isinstance(request, str):
+        authorization = request
+        request = None
+
     if not authorization:
         logger.warning("auth_no_header", extra={"location": "auth.py:get_current_user"})
         raise HTTPException(status_code=401, detail="Authorization header required")
@@ -62,14 +67,24 @@ async def get_current_user(request: Request, authorization: Optional[str] = Head
     from app.config import settings
     logger.debug("auth_supabase_url", extra={"supabase_url": settings.supabase_url})
 
-    client = request.app.state.http_client
-    resp = await client.get(
-        f"{settings.supabase_url}/auth/v1/user",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "apikey": settings.supabase_service_key,
-        },
-    )
+    if request is not None and hasattr(request, "app") and hasattr(request.app, "state") and hasattr(request.app.state, "http_client"):
+        client = request.app.state.http_client
+        resp = await client.get(
+            f"{settings.supabase_url}/auth/v1/user",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "apikey": settings.supabase_service_key,
+            },
+        )
+    else:
+        async with httpx.AsyncClient(timeout=10.0) as temp_client:
+            resp = await temp_client.get(
+                f"{settings.supabase_url}/auth/v1/user",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "apikey": settings.supabase_service_key,
+                },
+            )
     logger.debug("auth_supabase_response", extra={"status_code": resp.status_code})
 
     if resp.status_code == 401:
