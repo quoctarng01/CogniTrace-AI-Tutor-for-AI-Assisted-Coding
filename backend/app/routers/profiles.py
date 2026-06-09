@@ -53,6 +53,9 @@ async def update_profile(
     ai_tools_usage: str | None = None,
     ollama_endpoint: str | None = None,
     github_models_pat: str | None = None,
+    custom_api_url: str | None = None,
+    custom_api_key: str | None = None,
+    custom_api_model: str | None = None,
     authorization: str = Header(None),
 ):
     """
@@ -100,6 +103,12 @@ async def update_profile(
         update_data["ollama_endpoint"] = ollama_endpoint
     if github_models_pat is not None:
         update_data["github_models_pat"] = github_models_pat.strip() if github_models_pat else None
+    if custom_api_url is not None:
+        update_data["custom_api_url"] = custom_api_url.strip() if custom_api_url else None
+    if custom_api_key is not None:
+        update_data["custom_api_key"] = custom_api_key.strip() if custom_api_key else None
+    if custom_api_model is not None:
+        update_data["custom_api_model"] = custom_api_model.strip() if custom_api_model else None
     
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")

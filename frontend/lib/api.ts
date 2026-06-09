@@ -76,6 +76,9 @@ export interface Profile {
   ai_tools_usage: 'none' | 'light' | 'moderate' | 'heavy';
   ollama_endpoint: string;
   github_models_pat?: string | null;
+  custom_api_url?: string | null;
+  custom_api_key?: string | null;
+  custom_api_model?: string | null;
   plan: 'free' | 'pro';
 }
 
@@ -213,7 +216,7 @@ class CogniTraceAPI {
   }
 
   async updateProfile(
-    updates: Partial<Pick<Profile, 'experience_level' | 'ai_tools_usage' | 'ollama_endpoint' | 'github_models_pat'>>
+    updates: Partial<Pick<Profile, 'experience_level' | 'ai_tools_usage' | 'ollama_endpoint' | 'github_models_pat' | 'custom_api_url' | 'custom_api_key' | 'custom_api_model'>>
   ): Promise<Profile> {
     return this.fetch<Profile>('/profiles/me', {
       method: 'PATCH',

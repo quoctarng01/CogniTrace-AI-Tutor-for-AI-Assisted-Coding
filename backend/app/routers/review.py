@@ -297,14 +297,21 @@ async def get_review_card(
     
     if concept_tag in MISCONCEPTION_TAGS:
         from app.services.llm_router import llm_router
-        custom_github_pat = None
+        custom_settings = None
         if profile_id:
-            from app.dependencies import get_github_pat_for_profile
-            custom_github_pat = await get_github_pat_for_profile(profile_id, client)
+            from app.dependencies import get_profile_settings
+            custom_settings = await get_profile_settings(profile_id, client)
         try:
             kwargs = {}
-            if custom_github_pat:
-                kwargs["github_models_pat"] = custom_github_pat
+            if custom_settings:
+                if custom_settings.get("github_models_pat"):
+                    kwargs["github_models_pat"] = custom_settings["github_models_pat"]
+                if custom_settings.get("custom_api_url"):
+                    kwargs["custom_api_url"] = custom_settings["custom_api_url"]
+                if custom_settings.get("custom_api_key"):
+                    kwargs["custom_api_key"] = custom_settings["custom_api_key"]
+                if custom_settings.get("custom_api_model"):
+                    kwargs["custom_api_model"] = custom_settings["custom_api_model"]
             code_repair_challenge = await llm_router.generate_code_repair_challenge(
                 original_code=trace_data.get("code", ""),
                 misconception_tag=concept_tag,
@@ -394,13 +401,20 @@ async def grade_review_card(
     }
 
     from app.services.llm_router import llm_router
-    custom_github_pat = None
+    custom_settings = None
     if profile_id:
-        from app.dependencies import get_github_pat_for_profile
-        custom_github_pat = await get_github_pat_for_profile(profile_id, client)
+        from app.dependencies import get_profile_settings
+        custom_settings = await get_profile_settings(profile_id, client)
     kwargs = {}
-    if custom_github_pat:
-        kwargs["github_models_pat"] = custom_github_pat
+    if custom_settings:
+        if custom_settings.get("github_models_pat"):
+            kwargs["github_models_pat"] = custom_settings["github_models_pat"]
+        if custom_settings.get("custom_api_url"):
+            kwargs["custom_api_url"] = custom_settings["custom_api_url"]
+        if custom_settings.get("custom_api_key"):
+            kwargs["custom_api_key"] = custom_settings["custom_api_key"]
+        if custom_settings.get("custom_api_model"):
+            kwargs["custom_api_model"] = custom_settings["custom_api_model"]
     if concept_tag in MISCONCEPTION_TAGS:
         result = await llm_router.grade_code_repair(code, concept_tag, req.user_answer, **kwargs)
     else:

@@ -25,6 +25,7 @@ logger = logging.getLogger("codescope.llm_router")
 class LLMProvider(Enum):
     OLLAMA_CLOUD = "ollama_cloud"
     GITHUB_MODELS = "github_models"
+    CUSTOM_OPENAI = "custom_openai"
 
 @dataclass
 class LLMResponse:
@@ -111,6 +112,7 @@ class LLMRouter:
         locals_dict: dict,
         ollama_endpoint: str | None = None,
         github_models_pat: str | None = None,
+        **kwargs,
     ) -> AsyncGenerator[tuple[str, LLMProvider], None]:
         """
         Stream explanation tokens from the best available provider.
@@ -141,11 +143,19 @@ class LLMRouter:
         # 3. Try providers in order
         providers_to_try = []
         
-        # 1. Ollama Cloud (primary — free, no setup)
+        custom_url = kwargs.get("custom_api_url")
+        custom_key = kwargs.get("custom_api_key")
+        custom_model = kwargs.get("custom_api_model")
+
+        # 1. Custom OpenAI (highest priority if configured)
+        if custom_url and custom_key:
+            providers_to_try.append((LLMProvider.CUSTOM_OPENAI, custom_url, cache_key))
+
+        # 2. Ollama Cloud (primary — free, no setup)
         if settings.ollama_cloud_url:
             providers_to_try.append((LLMProvider.OLLAMA_CLOUD, settings.ollama_cloud_url, cache_key))
         
-        # 2. GitHub Models (fallback — requires PAT)
+        # 3. GitHub Models (fallback — requires PAT)
         pat = github_models_pat or settings.github_models_pat
         if pat:
             providers_to_try.append((LLMProvider.GITHUB_MODELS, "github_models", cache_key))
@@ -156,7 +166,11 @@ class LLMRouter:
         
         for provider, _endpoint, _cache_key in providers_to_try:
             try:
-                if provider == LLMProvider.GITHUB_MODELS:
+                if provider == LLMProvider.CUSTOM_OPENAI:
+                    async for token in self._stream_custom_openai(SYSTEM_PROMPT, user_message, cache_key, custom_url, custom_key, custom_model):
+                        full_text.append(token)
+                        yield token, provider
+                elif provider == LLMProvider.GITHUB_MODELS:
                     async for token in self._stream_github_models(SYSTEM_PROMPT, user_message, cache_key, github_models_pat):
                         full_text.append(token)
                         yield token, provider
@@ -177,9 +191,13 @@ class LLMRouter:
                         text=combined,
                         provider_used=final_provider.value,
                         model_name=(
-                            settings.github_models_model
-                            if final_provider == LLMProvider.GITHUB_MODELS
-                            else (settings.ollama_model or "llama3.2")
+                            custom_model or "gpt-4o-mini"
+                            if final_provider == LLMProvider.CUSTOM_OPENAI
+                            else (
+                                settings.github_models_model
+                                if final_provider == LLMProvider.GITHUB_MODELS
+                                else (settings.ollama_model or "llama3.2")
+                            )
                         ),
                         line_number=line_number,
                     )
@@ -203,6 +221,74 @@ class LLMRouter:
             yield word + " ", LLMProvider.OLLAMA_CLOUD
         yield "__done__", LLMProvider.OLLAMA_CLOUD
     
+    async def _stream_custom_openai(
+        self,
+        system_msg: str,
+        user_msg: str,
+        cache_key: str,
+        custom_url: str,
+        custom_key: str,
+        custom_model: str | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream from a custom OpenAI-compatible endpoint using true server-sent events."""
+        url = custom_url.rstrip("/")
+        if not (url.endswith("/chat/completions") or url.endswith("/completions")):
+            if "/v1" in url:
+                url = f"{url}/chat/completions"
+            else:
+                url = f"{url}/v1/chat/completions"
+
+        headers = {
+            "Authorization": f"Bearer {custom_key}",
+            "Content-Type": "application/json",
+        }
+        model = custom_model or "gpt-4o-mini"
+
+        async with self._http.stream(
+            "POST",
+            url,
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg},
+                ],
+                "stream": True,
+            },
+            headers=headers,
+        ) as response:
+            if response.status_code >= 400:
+                error_body = await response.aread()
+                logger.error(
+                    f"Custom OpenAI API error: {response.status_code} - {error_body[:200]}"
+                )
+                raise httpx.HTTPStatusError(
+                    f"HTTP {response.status_code}",
+                    request=response.request,
+                    response=response,
+                )
+
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+
+                payload = line[len("data: "):]
+
+                if payload.strip() == "[DONE]":
+                    break
+
+                try:
+                    chunk = json.loads(payload)
+                    choices = chunk.get("choices", [])
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta", {})
+                    content = delta.get("content", "")
+                    if content:
+                        yield content
+                except json.JSONDecodeError:
+                    continue
+
     async def _stream_github_models(self, system_msg: str, user_msg: str, cache_key: str, github_models_pat: str | None = None) -> AsyncGenerator[str, None]:
         """Stream from GitHub Models API using true server-sent events.
 
@@ -334,6 +420,7 @@ class LLMRouter:
         steps_json: str,
         user_answer: str,
         github_models_pat: str | None = None,
+        **kwargs,
     ) -> dict[str, Any]:
         """
         Grade the student's answer comparing it to the code and execution trace.
@@ -375,6 +462,43 @@ Trace Steps:
 
 Student Answer:
 {user_answer}"""
+
+        # Choose provider based on config
+        custom_url = kwargs.get("custom_api_url")
+        custom_key = kwargs.get("custom_api_key")
+        custom_model = kwargs.get("custom_api_model")
+
+        if custom_url and custom_key:
+            url = custom_url.rstrip("/")
+            if not (url.endswith("/chat/completions") or url.endswith("/completions")):
+                if "/v1" in url:
+                    url = f"{url}/chat/completions"
+                else:
+                    url = f"{url}/v1/chat/completions"
+            model = custom_model or "gpt-4o-mini"
+            try:
+                resp = await self._http.post(
+                    url,
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": system_grader_prompt},
+                            {"role": "user", "content": user_content},
+                        ],
+                        "response_format": {"type": "json_object"},
+                    },
+                    headers={
+                        "Authorization": f"Bearer {custom_key}",
+                        "Content-Type": "application/json",
+                    },
+                )
+                if resp.status_code == 200:
+                    try:
+                        return json.loads(resp.json()["choices"][0]["message"]["content"])
+                    except Exception as e:
+                        logger.error(f"Failed to parse Custom OpenAI grade response: {e}")
+            except Exception as e:
+                logger.error(f"Custom OpenAI grade request failed: {e}")
 
         # Choose provider based on config
         pat = github_models_pat or settings.github_models_pat
@@ -448,6 +572,7 @@ Student Answer:
         user_prediction: str,
         lineno: int,
         github_models_pat: str | None = None,
+        **kwargs,
     ) -> dict[str, Any]:
         """
         Diagnose a student's misconception by comparing their wrong prediction
@@ -492,6 +617,43 @@ Checkpoint Type: {checkpoint_type}
 Variable: {variable_name or 'N/A'}
 Interpreter Correct Value: {correct_value}
 Student Incorrect Prediction: {user_prediction}"""
+
+        # Choose provider based on config
+        custom_url = kwargs.get("custom_api_url")
+        custom_key = kwargs.get("custom_api_key")
+        custom_model = kwargs.get("custom_api_model")
+
+        if custom_url and custom_key:
+            url = custom_url.rstrip("/")
+            if not (url.endswith("/chat/completions") or url.endswith("/completions")):
+                if "/v1" in url:
+                    url = f"{url}/chat/completions"
+                else:
+                    url = f"{url}/v1/chat/completions"
+            model = custom_model or "gpt-4o-mini"
+            try:
+                resp = await self._http.post(
+                    url,
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_content},
+                        ],
+                        "response_format": {"type": "json_object"},
+                    },
+                    headers={
+                        "Authorization": f"Bearer {custom_key}",
+                        "Content-Type": "application/json",
+                    },
+                )
+                if resp.status_code == 200:
+                    try:
+                        return json.loads(resp.json()["choices"][0]["message"]["content"])
+                    except Exception as e:
+                        logger.error(f"Failed to parse Custom OpenAI diagnosis response: {e}")
+            except Exception as e:
+                logger.error(f"Custom OpenAI diagnosis request failed: {e}")
 
         # Choose provider based on config
         pat = github_models_pat or settings.github_models_pat
@@ -625,6 +787,7 @@ Student Incorrect Prediction: {user_prediction}"""
         original_code: str,
         misconception_tag: str,
         github_models_pat: str | None = None,
+        **kwargs,
     ) -> str:
         """
         Generate a dynamic programming challenge targeting a specific misconception
@@ -650,6 +813,39 @@ def first_even(nums):
 """
 
         user_content = f"Original Trace Code:\n```python\n{original_code}\n```\n\nMisconception Tag: {misconception_tag}"
+
+        # Choose provider based on config
+        custom_url = kwargs.get("custom_api_url")
+        custom_key = kwargs.get("custom_api_key")
+        custom_model = kwargs.get("custom_api_model")
+
+        if custom_url and custom_key:
+            url = custom_url.rstrip("/")
+            if not (url.endswith("/chat/completions") or url.endswith("/completions")):
+                if "/v1" in url:
+                    url = f"{url}/chat/completions"
+                else:
+                    url = f"{url}/v1/chat/completions"
+            model = custom_model or "gpt-4o-mini"
+            try:
+                resp = await self._http.post(
+                    url,
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt.format(tag=misconception_tag)},
+                            {"role": "user", "content": user_content},
+                        ],
+                    },
+                    headers={
+                        "Authorization": f"Bearer {custom_key}",
+                        "Content-Type": "application/json",
+                    },
+                )
+                if resp.status_code == 200:
+                    return resp.json()["choices"][0]["message"]["content"].strip()
+            except Exception as e:
+                logger.error(f"Custom OpenAI generate challenge failed: {e}")
 
         # Choose provider
         pat = github_models_pat or settings.github_models_pat
@@ -711,6 +907,7 @@ def fix_me(items):
         misconception_tag: str,
         user_fix: str,
         github_models_pat: str | None = None,
+        **kwargs,
     ) -> dict[str, Any]:
         """
         Grade the student's code repair attempt targeting a specific misconception.
@@ -743,6 +940,43 @@ Misconception tag: {misconception_tag}
 
 Student Corrected Code submission:
 {user_fix}"""
+
+        # Choose provider based on config
+        custom_url = kwargs.get("custom_api_url")
+        custom_key = kwargs.get("custom_api_key")
+        custom_model = kwargs.get("custom_api_model")
+
+        if custom_url and custom_key:
+            url = custom_url.rstrip("/")
+            if not (url.endswith("/chat/completions") or url.endswith("/completions")):
+                if "/v1" in url:
+                    url = f"{url}/chat/completions"
+                else:
+                    url = f"{url}/v1/chat/completions"
+            model = custom_model or "gpt-4o-mini"
+            try:
+                resp = await self._http.post(
+                    url,
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": system_grader_prompt},
+                            {"role": "user", "content": user_content},
+                        ],
+                        "response_format": {"type": "json_object"},
+                    },
+                    headers={
+                        "Authorization": f"Bearer {custom_key}",
+                        "Content-Type": "application/json",
+                    },
+                )
+                if resp.status_code == 200:
+                    try:
+                        return json.loads(resp.json()["choices"][0]["message"]["content"])
+                    except Exception as e:
+                        logger.error(f"Failed to parse Custom OpenAI grade repair response: {e}")
+            except Exception as e:
+                logger.error(f"Custom OpenAI grade repair request failed: {e}")
 
         # Choose provider
         pat = github_models_pat or settings.github_models_pat

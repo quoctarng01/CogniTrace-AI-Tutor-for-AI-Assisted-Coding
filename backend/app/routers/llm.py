@@ -63,14 +63,14 @@ async def stream_explanation(
     if not jwt_token and authorization and authorization.startswith("Bearer "):
         jwt_token = authorization[7:]
     
-    custom_github_pat = None
+    custom_settings = None
     if jwt_token:
         from app.routers.auth import get_profile_id
         user_id = await get_profile_id(jwt_token)
         if user_id:
-            from app.dependencies import get_github_pat_for_profile
+            from app.dependencies import get_profile_settings
             client = request.app.state.http_client if hasattr(request.app, "state") and hasattr(request.app.state, "http_client") else None
-            custom_github_pat = await get_github_pat_for_profile(user_id, client)
+            custom_settings = await get_profile_settings(user_id, client)
     
     # 3. Rate limit check (only for anonymous/unauthenticated users)
     # Authenticated Pro users bypass rate limiting
@@ -105,8 +105,15 @@ async def stream_explanation(
         
         try:
             kwargs = {}
-            if custom_github_pat:
-                kwargs["github_models_pat"] = custom_github_pat
+            if custom_settings:
+                if custom_settings.get("github_models_pat"):
+                    kwargs["github_models_pat"] = custom_settings["github_models_pat"]
+                if custom_settings.get("custom_api_url"):
+                    kwargs["custom_api_url"] = custom_settings["custom_api_url"]
+                if custom_settings.get("custom_api_key"):
+                    kwargs["custom_api_key"] = custom_settings["custom_api_key"]
+                if custom_settings.get("custom_api_model"):
+                    kwargs["custom_api_model"] = custom_settings["custom_api_model"]
             async for token, provider in llm_router.stream_explain(
                 code=code,
                 line_number=line_number,
@@ -170,23 +177,30 @@ async def diagnose_checkpoint_error(
     Diagnose a student's incorrect state prediction.
     If authenticated, automatically creates a trace and review_card targeting the misconception.
     """
-    # 0. Load custom PAT if authenticated
-    custom_github_pat = None
+    # 0. Load custom profile settings if authenticated
+    custom_settings = None
     if authorization and authorization.startswith("Bearer "):
         try:
             token = authorization[7:]
             from app.routers.auth import get_profile_id
-            from app.dependencies import get_github_pat_for_profile
+            from app.dependencies import get_profile_settings
             profile_id = await get_profile_id(token)
             if profile_id:
-                custom_github_pat = await get_github_pat_for_profile(profile_id)
+                custom_settings = await get_profile_settings(profile_id)
         except Exception:
             pass
 
     # 1. Run the LLM mismatch diagnosis
     kwargs = {}
-    if custom_github_pat:
-        kwargs["github_models_pat"] = custom_github_pat
+    if custom_settings:
+        if custom_settings.get("github_models_pat"):
+            kwargs["github_models_pat"] = custom_settings["github_models_pat"]
+        if custom_settings.get("custom_api_url"):
+            kwargs["custom_api_url"] = custom_settings["custom_api_url"]
+        if custom_settings.get("custom_api_key"):
+            kwargs["custom_api_key"] = custom_settings["custom_api_key"]
+        if custom_settings.get("custom_api_model"):
+            kwargs["custom_api_model"] = custom_settings["custom_api_model"]
     diagnosis = await llm_router.diagnose_misconception(
         code=req.code,
         checkpoint_type=req.checkpoint_type,

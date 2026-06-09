@@ -189,3 +189,46 @@ async def get_github_pat_for_profile(profile_id: str, client: httpx.AsyncClient 
     return None
 
 
+async def get_profile_settings(profile_id: str, client: httpx.AsyncClient | None = None) -> Optional[dict]:
+    """
+    Get the custom settings (custom_api_url, custom_api_key, custom_api_model, github_models_pat)
+    for a given profile ID.
+    """
+    if not profile_id:
+        return None
+    try:
+        select_cols = "github_models_pat,custom_api_url,custom_api_key,custom_api_model"
+        if client is not None:
+            resp = await client.get(
+                f"{app_settings.supabase_url}/rest/v1/profiles",
+                params={"id": f"eq.{profile_id}", "select": select_cols},
+                headers={
+                    "Authorization": f"Bearer {app_settings.supabase_service_key}",
+                    "apikey": app_settings.supabase_service_key,
+                },
+            )
+            if resp.status_code == 200:
+                profiles = resp.json()
+                if profiles and len(profiles) > 0:
+                    return profiles[0]
+            return None
+
+        async with httpx.AsyncClient(timeout=5.0) as temp_client:
+            resp = await temp_client.get(
+                f"{app_settings.supabase_url}/rest/v1/profiles",
+                params={"id": f"eq.{profile_id}", "select": select_cols},
+                headers={
+                    "Authorization": f"Bearer {app_settings.supabase_service_key}",
+                    "apikey": app_settings.supabase_service_key,
+                },
+            )
+            if resp.status_code == 200:
+                profiles = resp.json()
+                if profiles and len(profiles) > 0:
+                    return profiles[0]
+    except Exception:
+        pass
+    return None
+
+
+
