@@ -63,9 +63,14 @@ async def stream_explanation(
     if not jwt_token and authorization and authorization.startswith("Bearer "):
         jwt_token = authorization[7:]
     
+    custom_github_pat = None
     if jwt_token:
         from app.routers.auth import get_profile_id
         user_id = await get_profile_id(jwt_token)
+        if user_id:
+            from app.dependencies import get_github_pat_for_profile
+            client = request.app.state.http_client if hasattr(request.app, "state") and hasattr(request.app.state, "http_client") else None
+            custom_github_pat = await get_github_pat_for_profile(user_id, client)
     
     # 3. Rate limit check (only for anonymous/unauthenticated users)
     # Authenticated Pro users bypass rate limiting
@@ -99,12 +104,16 @@ async def stream_explanation(
         error_occurred = False
         
         try:
+            kwargs = {}
+            if custom_github_pat:
+                kwargs["github_models_pat"] = custom_github_pat
             async for token, provider in llm_router.stream_explain(
                 code=code,
                 line_number=line_number,
                 line_content=line_content,
                 locals_dict=locals_dict,
                 ollama_endpoint=ollama_endpoint,
+                **kwargs
             ):
                 if token == "__done__":
                     break
@@ -161,7 +170,23 @@ async def diagnose_checkpoint_error(
     Diagnose a student's incorrect state prediction.
     If authenticated, automatically creates a trace and review_card targeting the misconception.
     """
+    # 0. Load custom PAT if authenticated
+    custom_github_pat = None
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            token = authorization[7:]
+            from app.routers.auth import get_profile_id
+            from app.dependencies import get_github_pat_for_profile
+            profile_id = await get_profile_id(token)
+            if profile_id:
+                custom_github_pat = await get_github_pat_for_profile(profile_id)
+        except Exception:
+            pass
+
     # 1. Run the LLM mismatch diagnosis
+    kwargs = {}
+    if custom_github_pat:
+        kwargs["github_models_pat"] = custom_github_pat
     diagnosis = await llm_router.diagnose_misconception(
         code=req.code,
         checkpoint_type=req.checkpoint_type,
@@ -169,6 +194,7 @@ async def diagnose_checkpoint_error(
         correct_value=req.correct_value,
         user_prediction=req.user_prediction,
         lineno=req.line_number,
+        **kwargs
     )
     
     tag = diagnosis.get("tag", "general_logic_error")

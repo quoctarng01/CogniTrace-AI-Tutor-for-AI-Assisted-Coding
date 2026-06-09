@@ -52,6 +52,7 @@ async def update_profile(
     experience_level: str | None = None,
     ai_tools_usage: str | None = None,
     ollama_endpoint: str | None = None,
+    github_models_pat: str | None = None,
     authorization: str = Header(None),
 ):
     """
@@ -97,6 +98,8 @@ async def update_profile(
         update_data["ai_tools_usage"] = ai_tools_usage
     if ollama_endpoint is not None:
         update_data["ollama_endpoint"] = ollama_endpoint
+    if github_models_pat is not None:
+        update_data["github_models_pat"] = github_models_pat.strip() if github_models_pat else None
     
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")

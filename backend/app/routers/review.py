@@ -297,10 +297,18 @@ async def get_review_card(
     
     if concept_tag in MISCONCEPTION_TAGS:
         from app.services.llm_router import llm_router
+        custom_github_pat = None
+        if profile_id:
+            from app.dependencies import get_github_pat_for_profile
+            custom_github_pat = await get_github_pat_for_profile(profile_id, client)
         try:
+            kwargs = {}
+            if custom_github_pat:
+                kwargs["github_models_pat"] = custom_github_pat
             code_repair_challenge = await llm_router.generate_code_repair_challenge(
                 original_code=trace_data.get("code", ""),
-                misconception_tag=concept_tag
+                misconception_tag=concept_tag,
+                **kwargs
             )
         except Exception as e:
             logger.error("failed_to_generate_code_repair_challenge", extra={"error": str(e)})
@@ -386,10 +394,17 @@ async def grade_review_card(
     }
 
     from app.services.llm_router import llm_router
+    custom_github_pat = None
+    if profile_id:
+        from app.dependencies import get_github_pat_for_profile
+        custom_github_pat = await get_github_pat_for_profile(profile_id, client)
+    kwargs = {}
+    if custom_github_pat:
+        kwargs["github_models_pat"] = custom_github_pat
     if concept_tag in MISCONCEPTION_TAGS:
-        result = await llm_router.grade_code_repair(code, concept_tag, req.user_answer)
+        result = await llm_router.grade_code_repair(code, concept_tag, req.user_answer, **kwargs)
     else:
-        result = await llm_router.grade_explanation(code, steps_json, req.user_answer)
+        result = await llm_router.grade_explanation(code, steps_json, req.user_answer, **kwargs)
     return result
 
 

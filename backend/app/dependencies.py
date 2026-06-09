@@ -108,3 +108,84 @@ async def is_pro_user(user_id: str | None, client: httpx.AsyncClient | None = No
         pass
     return False
 
+
+async def get_github_pat_for_user(user_id: str, client: httpx.AsyncClient | None = None) -> Optional[str]:
+    """
+    Get the custom github_models_pat for the given auth user UUID.
+    """
+    if not user_id:
+        return None
+    try:
+        if client is not None:
+            resp = await client.get(
+                f"{app_settings.supabase_url}/rest/v1/profiles",
+                params={"user_id": f"eq.{user_id}", "select": "github_models_pat"},
+                headers={
+                    "Authorization": f"Bearer {app_settings.supabase_service_key}",
+                    "apikey": app_settings.supabase_service_key,
+                },
+            )
+            if resp.status_code == 200:
+                profiles = resp.json()
+                if profiles and len(profiles) > 0:
+                    return profiles[0].get("github_models_pat")
+            return None
+
+        async with httpx.AsyncClient(timeout=5.0) as temp_client:
+            resp = await temp_client.get(
+                f"{app_settings.supabase_url}/rest/v1/profiles",
+                params={"user_id": f"eq.{user_id}", "select": "github_models_pat"},
+                headers={
+                    "Authorization": f"Bearer {app_settings.supabase_service_key}",
+                    "apikey": app_settings.supabase_service_key,
+                },
+            )
+            if resp.status_code == 200:
+                profiles = resp.json()
+                if profiles and len(profiles) > 0:
+                    return profiles[0].get("github_models_pat")
+    except Exception:
+        pass
+    return None
+
+
+async def get_github_pat_for_profile(profile_id: str, client: httpx.AsyncClient | None = None) -> Optional[str]:
+    """
+    Get the custom github_models_pat for the given profile ID.
+    """
+    if not profile_id:
+        return None
+    try:
+        if client is not None:
+            resp = await client.get(
+                f"{app_settings.supabase_url}/rest/v1/profiles",
+                params={"id": f"eq.{profile_id}", "select": "github_models_pat"},
+                headers={
+                    "Authorization": f"Bearer {app_settings.supabase_service_key}",
+                    "apikey": app_settings.supabase_service_key,
+                },
+            )
+            if resp.status_code == 200:
+                profiles = resp.json()
+                if profiles and len(profiles) > 0:
+                    return profiles[0].get("github_models_pat")
+            return None
+
+        async with httpx.AsyncClient(timeout=5.0) as temp_client:
+            resp = await temp_client.get(
+                f"{app_settings.supabase_url}/rest/v1/profiles",
+                params={"id": f"eq.{profile_id}", "select": "github_models_pat"},
+                headers={
+                    "Authorization": f"Bearer {app_settings.supabase_service_key}",
+                    "apikey": app_settings.supabase_service_key,
+                },
+            )
+            if resp.status_code == 200:
+                profiles = resp.json()
+                if profiles and len(profiles) > 0:
+                    return profiles[0].get("github_models_pat")
+    except Exception:
+        pass
+    return None
+
+

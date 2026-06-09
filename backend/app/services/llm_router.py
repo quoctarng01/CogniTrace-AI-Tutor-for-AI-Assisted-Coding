@@ -110,6 +110,7 @@ class LLMRouter:
         line_content: str,
         locals_dict: dict,
         ollama_endpoint: str | None = None,
+        github_models_pat: str | None = None,
     ) -> AsyncGenerator[tuple[str, LLMProvider], None]:
         """
         Stream explanation tokens from the best available provider.
@@ -145,7 +146,8 @@ class LLMRouter:
             providers_to_try.append((LLMProvider.OLLAMA_CLOUD, settings.ollama_cloud_url, cache_key))
         
         # 2. GitHub Models (fallback — requires PAT)
-        if settings.github_models_pat:
+        pat = github_models_pat or settings.github_models_pat
+        if pat:
             providers_to_try.append((LLMProvider.GITHUB_MODELS, "github_models", cache_key))
         
         errors = []
@@ -155,7 +157,7 @@ class LLMRouter:
         for provider, _endpoint, _cache_key in providers_to_try:
             try:
                 if provider == LLMProvider.GITHUB_MODELS:
-                    async for token in self._stream_github_models(SYSTEM_PROMPT, user_message, cache_key):
+                    async for token in self._stream_github_models(SYSTEM_PROMPT, user_message, cache_key, github_models_pat):
                         full_text.append(token)
                         yield token, provider
                 elif provider == LLMProvider.OLLAMA_CLOUD:
@@ -201,7 +203,7 @@ class LLMRouter:
             yield word + " ", LLMProvider.OLLAMA_CLOUD
         yield "__done__", LLMProvider.OLLAMA_CLOUD
     
-    async def _stream_github_models(self, system_msg: str, user_msg: str, cache_key: str) -> AsyncGenerator[str, None]:
+    async def _stream_github_models(self, system_msg: str, user_msg: str, cache_key: str, github_models_pat: str | None = None) -> AsyncGenerator[str, None]:
         """Stream from GitHub Models API using true server-sent events.
 
         Uses stream=True so tokens appear as the model generates them,
@@ -214,7 +216,7 @@ class LLMRouter:
         """
         model = settings.github_models_model or "openai/gpt-4o-mini"
         url = "https://models.github.ai/inference/chat/completions"
-        pat = settings.github_models_pat
+        pat = github_models_pat or settings.github_models_pat
 
         headers = {
             "Authorization": f"Bearer {pat}",
@@ -331,6 +333,7 @@ class LLMRouter:
         code: str,
         steps_json: str,
         user_answer: str,
+        github_models_pat: str | None = None,
     ) -> dict[str, Any]:
         """
         Grade the student's answer comparing it to the code and execution trace.
@@ -374,7 +377,7 @@ Student Answer:
 {user_answer}"""
 
         # Choose provider based on config
-        pat = settings.github_models_pat
+        pat = github_models_pat or settings.github_models_pat
         if pat:
             # Use GitHub Models (OpenAI-compatible)
             model = settings.github_models_model or "openai/gpt-4o-mini"
@@ -444,6 +447,7 @@ Student Answer:
         correct_value: str,
         user_prediction: str,
         lineno: int,
+        github_models_pat: str | None = None,
     ) -> dict[str, Any]:
         """
         Diagnose a student's misconception by comparing their wrong prediction
@@ -490,7 +494,7 @@ Interpreter Correct Value: {correct_value}
 Student Incorrect Prediction: {user_prediction}"""
 
         # Choose provider based on config
-        pat = settings.github_models_pat
+        pat = github_models_pat or settings.github_models_pat
         if pat:
             model = settings.github_models_model or "openai/gpt-4o-mini"
             url = "https://models.github.ai/inference/chat/completions"
@@ -620,6 +624,7 @@ Student Incorrect Prediction: {user_prediction}"""
         self,
         original_code: str,
         misconception_tag: str,
+        github_models_pat: str | None = None,
     ) -> str:
         """
         Generate a dynamic programming challenge targeting a specific misconception
@@ -647,7 +652,7 @@ def first_even(nums):
         user_content = f"Original Trace Code:\n```python\n{original_code}\n```\n\nMisconception Tag: {misconception_tag}"
 
         # Choose provider
-        pat = settings.github_models_pat
+        pat = github_models_pat or settings.github_models_pat
         if pat:
             model = settings.github_models_model or "openai/gpt-4o-mini"
             url = "https://models.github.ai/inference/chat/completions"
@@ -705,6 +710,7 @@ def fix_me(items):
         original_code: str,
         misconception_tag: str,
         user_fix: str,
+        github_models_pat: str | None = None,
     ) -> dict[str, Any]:
         """
         Grade the student's code repair attempt targeting a specific misconception.
@@ -739,7 +745,7 @@ Student Corrected Code submission:
 {user_fix}"""
 
         # Choose provider
-        pat = settings.github_models_pat
+        pat = github_models_pat or settings.github_models_pat
         if pat:
             model = settings.github_models_model or "openai/gpt-4o-mini"
             url = "https://models.github.ai/inference/chat/completions"
