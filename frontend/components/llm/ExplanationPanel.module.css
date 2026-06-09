@@ -336,7 +336,23 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
 }
+
+.localConfig::-webkit-scrollbar {
+  width: 6px;
+}
+
+.localConfig::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.localConfig::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
 
 .endpointField {
   display: flex;
