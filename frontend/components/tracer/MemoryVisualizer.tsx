@@ -1,4 +1,10 @@
 'use client';
+/**
+ * Purpose: Heap-and-stack visual used during playback.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import React from 'react';
 import styles from './MemoryVisualizer.module.css';

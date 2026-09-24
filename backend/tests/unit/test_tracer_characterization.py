@@ -11,7 +11,7 @@ import ast
 import pytest
 from tracer.tracer import (
     run_trace,
-    _build_jump_map,
+    _build_branch_decisions as _build_jump_map,
     _build_opcode_map,
     _step_to_dict,
     _is_internal_variable,
@@ -77,13 +77,26 @@ def test_build_jump_map_no_branches():
 
 
 def test_build_jump_map_boolop():
-    """BoolOp (and/or) expression IS captured in jump map."""
-    # Current behavior: BoolOp nodes ARE added to jump_map at their lineno
-    # This is a possible bug — BoolOp alone isn't a branch decision
+    """BoolOp (and/or) expression IS captured in jump map.
+
+    Post-Workstream 5: `_build_branch_decisions` returns `BranchDecision`
+    objects (not raw AST nodes) so the runtime tracer can invoke the
+    compile-time-compiled predicate without resorting to a stringly-typed
+    runtime evaluation step. The BoolOp *is* still captured — short-circuit
+    semantics for `and` / `or` matter when the tracer follows branch flow.
+    """
+    from tracer.tracer import BranchDecision
+
     result = _build_jump_map("x = True and False")
-    assert 1 in result  # BoolOp IS captured (possible bug: shouldn't be branch)
+    assert 1 in result  # BoolOp IS captured
     assert len(result[1]) == 1
-    assert isinstance(result[1][0], ast.BoolOp)
+    assert isinstance(result[1][0], BranchDecision)
+    # The decision records the line, the source condition, and a compiled
+    # predicate callable. All three must be present and well-formed.
+    decision = result[1][0]
+    assert decision.line == 1
+    assert "True and False" in decision.condition_expr
+    assert callable(decision.predicate)
 
 
 def test_build_jump_map_ternary():

@@ -1,3 +1,9 @@
+/**
+ * Purpose: Root layout — wraps every route in the Supabase provider and applies the global theme.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 import type { Metadata } from 'next';
 import { Inter, Lora, JetBrains_Mono } from 'next/font/google';
 import './globals.css';

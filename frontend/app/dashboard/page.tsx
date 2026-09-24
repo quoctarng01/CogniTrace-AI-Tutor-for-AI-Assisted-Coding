@@ -1,5 +1,11 @@
 // frontend/app/dashboard/page.tsx
 'use client';
+/**
+ * Purpose: Authenticated dashboard — streak, recent traces, spaced-repetition review queue.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -8,6 +14,8 @@ import { getSupabase, getAuthToken } from '@/lib/supabase';
 import { fetchDashboard } from '@/lib/api';
 import { formatNextReview } from '@/lib/sm2';
 import type { SavedTrace, ReviewCard } from '@/types/user';
+import { FingerprintBadge } from '@/components/tracer/FingerprintBadge';
+import { useFingerprint } from '@/hooks/useFingerprint';
 import styles from './page.module.css';
 
 function truncateCode(code: string, maxLines = 4): string {
@@ -93,6 +101,9 @@ export default function DashboardPage() {
           <Link href="/tracer" className={styles.newTraceBtn}>
             + New Trace
           </Link>
+          <Link href="/dashboard/mastery" className={styles.navExamplesLink}>
+            Mastery
+          </Link>
           <Link href="/examples" className={styles.navExamplesLink}>
             Examples
           </Link>
@@ -139,26 +150,7 @@ export default function DashboardPage() {
           ) : (
             <div className={styles.traceGrid}>
               {traces.map(trace => (
-                <div key={trace.id} className={styles.traceCard}>
-                  <pre className={styles.codePreview}>
-                    <code>{truncateCode(trace.code)}</code>
-                  </pre>
-                  <div className={styles.traceTags}>
-                    {(trace.concept_tags ?? []).slice(0, 3).map(tag => (
-                      <span key={tag} className={styles.tag}>
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                  <div className={styles.traceFooter}>
-                    <span className={styles.traceDate}>{timeAgo(trace.created_at)}</span>
-                    <div className={styles.traceActions}>
-                      <Link href={`/trace/${trace.share_token}`} className={styles.actionBtn}>
-                        Open
-                      </Link>
-                    </div>
-                  </div>
-                </div>
+                <TraceCardWithFingerprint key={trace.id} trace={trace} />
               ))}
             </div>
           )}
@@ -210,6 +202,40 @@ export default function DashboardPage() {
           )}
         </section>
       </main>
+    </div>
+  );
+}
+
+function TraceCardWithFingerprint({ trace }: { trace: SavedTrace }) {
+  const fp = useFingerprint(trace.id);
+  return (
+    <div className={styles.traceCard}>
+      <pre className={styles.codePreview}>
+        <code>{truncateCode(trace.code)}</code>
+      </pre>
+      <div className={styles.traceTags}>
+        {(trace.concept_tags ?? []).slice(0, 3).map(tag => (
+          <span key={tag} className={styles.tag}>
+            {tag}
+          </span>
+        ))}
+      </div>
+      {fp && (
+        <div style={{ marginTop: 8 }}>
+          <FingerprintBadge
+            fingerprint={fp}
+            label={`Trace fingerprint — ${trace.code.split('\n')[0]?.slice(0, 40) ?? 'open trace'}`}
+          />
+        </div>
+      )}
+      <div className={styles.traceFooter}>
+        <span className={styles.traceDate}>{timeAgo(trace.created_at)}</span>
+        <div className={styles.traceActions}>
+          <Link href={`/trace/${trace.share_token}`} className={styles.actionBtn}>
+            Open
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

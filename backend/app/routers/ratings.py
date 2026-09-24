@@ -1,16 +1,16 @@
 """Explanation ratings API endpoints."""
-from fastapi import APIRouter, HTTPException, Header
-from pydantic import BaseModel
-from typing import Optional
+
 import httpx
+from fastapi import APIRouter, Header, HTTPException
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/ratings", tags=["ratings"])
 
 
 class RatingRequest(BaseModel):
-    explanation_id: Optional[str] = None
-    trace_id: Optional[str] = None
-    user_id: Optional[str] = None
+    explanation_id: str | None = None
+    trace_id: str | None = None
+    user_id: str | None = None
     rating: int  # 1-5
 
 

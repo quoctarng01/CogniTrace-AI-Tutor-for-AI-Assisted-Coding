@@ -1,5 +1,11 @@
 // frontend/app/auth/callback/page.tsx
 'use client';
+/**
+ * Purpose: OAuth callback handler. Completes the Supabase sign-in flow and redirects.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';

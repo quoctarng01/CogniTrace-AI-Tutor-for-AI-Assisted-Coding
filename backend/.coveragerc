@@ -1,0 +1,35 @@
+# Coverage configuration for the backend.
+#
+# The CI gate (`--cov-fail-under=25`) starts at 25 % (current snapshot) and is
+# expected to climb in step with Workstream 8 (add missing test categories).
+# Long-term goal: 70 %.
+#
+# The omit list below:
+# - Excludes migrations (data-definition language, not unit-testable).
+# - Excludes `__init__.py` (usually empty, just a package marker).
+# - Excludes `pragma: no cover` markers for intentional non-tested lines.
+
+[run]
+branch = true
+source =
+    app
+    tracer
+omit =
+    migrations/*
+    */__init__.py
+    */tests/*
+    conftest.py
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    \.\.\.
+    pass
+
+[report]
+show_missing = true
+skip_covered = false
+precision = 1
+exclude_also =
+    \bif TYPE_CHECKING\b
+    \bassert False\b

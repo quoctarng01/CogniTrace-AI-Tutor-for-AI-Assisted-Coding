@@ -1,6 +1,5 @@
 """Trace data models."""
 from dataclasses import dataclass
-from typing import Optional
 
 
 class SandboxError(Exception):
@@ -17,13 +16,17 @@ class VariableInfo:
     type: str          # type(val).__name__
     value: str         # repr(val)[:200]
     changed: bool      # true if value changed from previous step
+    id: int | None = None           # Object memory ID id(val)
+    is_ref: bool = False              # True if heap reference (list, dict, tuple, set, obj)
+    children: dict | None = None   # Detailed element/item heap mapping
+    mutation_type: str = "unchanged"  # 'created' | 'mutated' | 'reassigned' | 'unchanged'
 
 
 @dataclass
 class BranchInfo:
     """A branch taken during control flow."""
     branch_type: str   # 'if' | 'for' | 'while' | 'ternary' | 'and_or'
-    taken: Optional[bool]  # True = if branch, False = else branch
+    taken: bool | None  # True = if branch, False = else branch
     line: int
     iteration: int = 0      # 0 = not a loop
 
@@ -39,7 +42,7 @@ class TraceStep:
     branches_taken: dict
     duration_ms: float
     call_depth: int = 1
-    exception_info: Optional[str] = None
+    exception_info: str | None = None
 
 
 @dataclass
@@ -55,4 +58,4 @@ class TraceError:
     """Failed trace result."""
     error: str        # 'SYNTAX_ERROR' | 'TIMEOUT' | 'MAX_STEPS' | 'EXECUTION_ERROR'
     message: str
-    line: Optional[int] = None
+    line: int | None = None

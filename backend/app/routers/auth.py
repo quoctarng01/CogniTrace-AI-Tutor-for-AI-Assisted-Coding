@@ -3,30 +3,17 @@
 Supabase JWT verification — validates Bearer token and returns the user record.
 Used as a dependency by other routers: Depends(get_current_user)
 """
-from fastapi import HTTPException, Header
-from typing import Optional
-import httpx
 import logging
 
+import httpx
+from fastapi import Header, HTTPException
+
+# Rate-limit decorator now lives in `app.rate_limit_decorator` so every router
+# imports from one place. The local copy is kept for backward compatibility
+# with the few endpoints here that already use it.
+from app.rate_limit_decorator import _rate_limit
+
 logger = logging.getLogger("codescope.auth")
-
-# ── Rate Limiter ────────────────────────────────────────────────
-_limiter = None
-try:
-    from slowapi import Limiter
-    from slowapi.util import get_remote_address
-    _limiter = Limiter(key_func=get_remote_address)
-except ImportError:
-    pass  # slowapi not installed — rate limiting disabled
-
-
-def _rate_limit(rate: str):
-    """Decorator factory for rate limiting."""
-    def decorator(func):
-        if _limiter is None:
-            return func
-        return _limiter.limit(rate)(func)
-    return decorator
 
 
 def get_rate_limit(rate: str):
@@ -38,7 +25,8 @@ def get_rate_limit(rate: str):
 
 from fastapi import Request
 
-async def get_current_user(request: Optional[Request] = None, authorization: Optional[str] = Header(None)) -> dict:
+
+async def get_current_user(request: Request | None = None, authorization: str | None = Header(None)) -> dict:
     """
     Verify the Authorization: Bearer <token> header against Supabase.
     Returns the decoded user dict from Supabase /auth/v1/user.
@@ -118,7 +106,7 @@ async def get_profile_id(token: str, client: httpx.AsyncClient | None = None) ->
         if user_resp.status_code != 200:
             logger.warning("get_profile_id_auth_failed", extra={"status_code": user_resp.status_code})
             return ""
-        
+
         user_id = user_resp.json().get("id", "")
         if not user_id:
             logger.warning("get_profile_id_no_uuid")
@@ -150,7 +138,7 @@ async def get_profile_id(token: str, client: httpx.AsyncClient | None = None) ->
         if user_resp.status_code != 200:
             logger.warning("get_profile_id_auth_failed", extra={"status_code": user_resp.status_code})
             return ""
-        
+
         user_id = user_resp.json().get("id", "")
         if not user_id:
             logger.warning("get_profile_id_no_uuid")

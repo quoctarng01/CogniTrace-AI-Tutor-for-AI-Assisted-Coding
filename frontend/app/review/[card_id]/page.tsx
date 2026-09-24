@@ -1,5 +1,11 @@
 // frontend/app/review/[card_id]/page.tsx
 'use client';
+/**
+ * Purpose: Spaced-repetition review session for a single flashcard.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';

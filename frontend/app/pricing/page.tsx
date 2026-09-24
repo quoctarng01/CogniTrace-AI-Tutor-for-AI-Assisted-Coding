@@ -1,4 +1,10 @@
 'use client';
+/**
+ * Purpose: Pricing page — explains free / pro limits and the upgrade flow.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import Link from 'next/link';
 import styles from './page.module.css';

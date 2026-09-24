@@ -12,6 +12,9 @@ import type {
   ReviewCardDetail,
   SharedTraceData,
 } from '@/types/user';
+import type { FingerprintPayload } from '@/types/fingerprint';
+import type { FingerprintDiffResponse } from '@/types/fingerprint';
+import type { MasteryTrajectory } from '@/types/trajectory';
 import { getAuthToken } from '@/lib/supabase';
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -132,6 +135,16 @@ class CogniTraceAPI {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
+    // Pilot instrumentation (W1). When the browser has an opaque session UUID
+    // stored by `useStudySession`, forward it on every API call so the backend
+    // can FK-tag telemetry rows to this participant's session.
+    // Reading from localStorage directly keeps the API class SSR-safe;
+    // when the hook hasn't mounted yet there is simply no header.
+    if (typeof window !== 'undefined') {
+      const session = window.localStorage.getItem('cognitrace_study_session');
+      if (session) headers['X-Study-Session'] = session;
+    }
+
     const res = await fetch(`${this.baseUrl}${path}`, {
       ...options,
       headers,
@@ -248,6 +261,10 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
   } else {
     logger.debug('[authFetch] NO Authorization header - token is null');
   }
+  if (typeof window !== 'undefined') {
+    const session = window.localStorage.getItem('cognitrace_study_session');
+    if (session) headers['X-Study-Session'] = session;
+  }
   return fetch(url, { ...options, headers });
 }
 
@@ -256,6 +273,41 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
 export async function fetchDashboard(): Promise<DashboardData> {
   const res = await authFetch(`${getApiBase()}/dashboard`);
   throwOnStatus(res, 'dashboard');
+  return res.json();
+}
+
+/**
+ * Fetch the per-concept mastery trajectory for the last `days` days.
+ * Powers the /dashboard/mastery page (THESIS-05 §2).
+ *
+ * Soft-fails on 401 and 404 by returning an empty trajectory instead of
+ * throwing. Rationale:
+ *   - 401: page already redirects to /auth/login on AUTH_REQUIRED, so
+ *     propagating it just produces a banner flash before the redirect.
+ *   - 404: most commonly means the backend hasn't been restarted yet to
+ *     pick up the new route, or the user has no events at all. The
+ *     page's empty state ("No mastery data yet") is the right UI for
+ *     both cases.
+ *
+ * Still throws on 5xx and network errors — those indicate a real
+ * problem the user should see.
+ */
+export async function fetchMasteryTrajectory(
+  days: number = 30,
+): Promise<MasteryTrajectory> {
+  const empty: MasteryTrajectory = {
+    concepts: [],
+    date_range: { start: null, end: null },
+    total_events: 0,
+    days,
+  };
+  const res = await authFetch(
+    `${getApiBase()}/review/trajectory?days=${encodeURIComponent(String(days))}`,
+  );
+  if (res.status === 401 || res.status === 404) {
+    return empty;
+  }
+  throwOnStatus(res, 'mastery trajectory');
   return res.json();
 }
 
@@ -366,6 +418,159 @@ export async function shareTrace(
   return res.json();
 }
 
+// ── Trace Fingerprint (thesis Contribution #4) ─────────────────
+
+/**
+ * Fetch the fingerprint wire payload for a saved trace.
+ *
+ * Backend lazy-computes on first access (V014 backfilled transparently),
+ * so this always returns — never throws "no fingerprint yet".
+ */
+export async function fetchFingerprint(traceId: string): Promise<FingerprintPayload> {
+  const res = await authFetch(`${getApiBase()}/traces/${traceId}/fingerprint`);
+  if (res.status === 404) throw new Error('FINGERPRINT_NOT_FOUND');
+  throwOnStatus(res, 'fingerprint');
+  return res.json();
+}
+
+/**
+ * Fetch the fingerprint by public share token — used by the standalone
+ * `/fingerprint/[share_token]` share page. Public traces are reachable
+ * anonymously; the owner sees their own private traces.
+ *
+ * NOTE: this route is mounted at `/api/fingerprint/{share_token}` (the
+ * literal path includes `/api/`) — the JSON-by-id endpoint is mounted
+ * at `/traces/{trace_id}/fingerprint` without an `/api/` prefix.
+ */
+export async function fetchFingerprintByShareToken(
+  shareToken: string
+): Promise<FingerprintPayload> {
+  const res = await authFetch(`${getApiBase()}/fingerprint/${shareToken}`);
+  if (res.status === 404) throw new Error('FINGERPRINT_NOT_FOUND');
+  throwOnStatus(res, 'fingerprint');
+  return res.json();
+}
+
+/**
+ * Compute (without persisting) the fingerprint for an arbitrary Python
+ * snippet. Used by the `/tracer/compare` paste-flow. The endpoint
+ * `/fingerprint/from-code` does no DB writes — it just runs the AST
+ * classifier and returns the same wire payload as a saved trace.
+ */
+export async function computeFingerprintFromCode(
+  code: string,
+  steps?: unknown[]
+): Promise<FingerprintPayload> {
+  const res = await fetch(`${getApiBase()}/api/fingerprint/from-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, steps: steps ?? [] }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to compute fingerprint: ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Absolute URL to the OG card SVG. Use as the OG `og:image` target so
+ * social-card crawlers (Twitter/X/LINE/Discord/Slack) render the
+ * fingerprint inline.
+ *
+ * NOTE: the OG card is mounted at `/fingerprint/{token}/card.svg`
+ * (no `/api/` prefix) so crawlers can hit it directly.
+ */
+export function fingerprintCardUrl(shareToken: string): string {
+  // Strip the `/api` suffix that getApiBase() adds — the OG card endpoint
+  // is mounted at the root so social-card crawlers can fetch it directly
+  // without auth headers.
+  const apiBase = getApiBase();
+  const rootBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
+  return `${rootBase}/fingerprint/${shareToken}/card.svg`;
+}
+
+// ── T1-D: Fingerprint diff (THESIS-05 §4) ────────────────────────────
+
+/**
+ * Fetch the structural delta between two fingerprints.
+ *
+ * Both `a` and `b` may be a share token or a trace id — the backend
+ * disambiguates by checking whether the value looks like a hex token.
+ * Returns `null` on a 404 (e.g. one of the two traces was deleted) so the
+ * page can render its empty state instead of an unhandled error.
+ */
+export async function fetchFingerprintDiff(
+  a: string,
+  b: string
+): Promise<FingerprintDiffResponse | null> {
+  const params = new URLSearchParams({ a, b });
+  const res = await authFetch(
+    `${getApiBase()}/api/diff/fingerprint?${params.toString()}`
+  );
+  if (res.status === 404) return null;
+  throwOnStatus(res, 'fingerprint diff');
+  return res.json();
+}
+
+/**
+ * Absolute URL to the diff OG-card SVG. Used as the OG `og:image` for the
+ * `/tracer/compare` page so social-card crawlers render the diff inline.
+ */
+export function fingerprintDiffCardUrl(a: string, b: string): string {
+  const apiBase = getApiBase();
+  const rootBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
+  const params = new URLSearchParams({ a, b });
+  return `${rootBase}/api/fingerprint/diff/card.svg?${params.toString()}`;
+}
+
+/* ── T1-A: Cognitive Load Dashboard ────────────────────────────────── *
+ *
+ * Wire shape from `GET /api/load/trace/{trace_id}`. Defined here next
+ * to the fetcher so consumers can import from a single module.
+ */
+
+export interface LoadPoint {
+  t_seconds: number;
+  /** 0..100 — same scale as the aggregate. Always 0 in the wire payload
+   * (only used by the dashboard to draw the line; the row's `label`
+   * carries the cause). */
+  score: number;
+  label: string;
+}
+
+export interface LoadResponse {
+  trace_id: string;
+  /** 0..100 aggregate. */
+  score: number;
+  /** Sub-scores in 0..1 for the stacked-bar breakdown. */
+  structural: number;
+  interaction: number;
+  sm2: number;
+  series: LoadPoint[];
+  notes: string[];
+  primary_concept_tag: string | null;
+  events_count: {
+    trace_steps: number;
+    interaction_events: number;
+    sm2_events: number;
+  };
+}
+
+/**
+ * Fetch a trace's cognitive-load estimate. Returns `null` on a 404 so
+ * the dashboard can fall back to a "trace not found" empty state.
+ */
+export async function fetchTraceLoad(
+  traceId: string
+): Promise<LoadResponse | null> {
+  const res = await authFetch(
+    `${getApiBase()}/load/trace/${encodeURIComponent(traceId)}`
+  );
+  if (res.status === 404) return null;
+  throwOnStatus(res, 'trace load');
+  return res.json();
+}
+
 // ── Re-export runTrace for convenience ──────────────────────────
 
 export async function runTrace(
@@ -378,9 +583,14 @@ export async function runTrace(
   if (options?.initialNamespace) {
     body.initial_namespace = options.initialNamespace;
   }
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (typeof window !== 'undefined') {
+    const session = window.localStorage.getItem('cognitrace_study_session');
+    if (session) headers['X-Study-Session'] = session;
+  }
   const res = await fetch(`${getApiBase()}/traces/run`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {

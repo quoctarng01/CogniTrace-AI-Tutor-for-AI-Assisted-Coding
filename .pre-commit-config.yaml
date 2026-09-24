@@ -1,0 +1,51 @@
+# Pre-commit hooks for CogniTrace (Workstream 9).
+#
+# Install once:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run on demand:
+#   pre-commit run --all-files
+
+repos:
+  # ── Backend: ruff format + ruff check ─────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff-format
+        # Run first — ruff-format will reformat files, then ruff-check runs.
+        files: ^backend/(app|tracer|analyzers)/
+        types_or: [python]
+      - id: ruff
+        # `args: [--fix]` so simple lint fixes auto-apply.
+        # Errors that require --unsafe-fixes (or are deliberate) are skipped
+        # silently — CI is the safety net for the strict gate.
+        args: [--fix]
+        files: ^backend/(app|tracer|analyzers)/
+        types_or: [python]
+
+  # ── Frontend: Prettier ──────────────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        files: ^frontend/(app|components|hooks|lib)/
+        types_or: [ts, tsx, json, yaml]
+
+  # ── Sanity: trailing whitespace + EOF newline ────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+        # docker-compose.yml uses YAML anchors — allow duplicate keys there.
+        args: [--allow-multiple-documents]
+        exclude: ^docker-compose\.yml$
+
+  # ── Block secret leaks at commit time ────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key

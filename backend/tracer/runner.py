@@ -2,11 +2,11 @@
 Subprocess runner for executing untrusted user code.
 Handles: temp file cleanup, 5s timeout, stderr capture, Windows compat.
 """
-import os
-import sys
 import json
-import tempfile
+import os
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 
@@ -22,10 +22,10 @@ def run_trace(source: str, max_steps: int = 500, initial_namespace: dict | None 
             # Add backend/ to path so 'tracer' is importable as a package
             backend_dir = str(Path(__file__).parent.parent)
             escaped_dir = backend_dir.replace("\\", "\\\\")
-            
+
             # Serialize initial_namespace to JSON for passing to subprocess
             ns_json = json.dumps(initial_namespace or {})
-            
+
             f.write("import sys, json, io, time\n")
             f.write("try:\n")
             f.write("    import resource\n")

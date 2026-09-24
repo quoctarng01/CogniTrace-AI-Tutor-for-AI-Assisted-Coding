@@ -13,19 +13,20 @@ async def test_diagnose_checkpoint_error_unauthenticated():
         user_prediction="5",
         line_number=2,
     )
-    
+
     mock_diagnosis = {
         "tag": "state_mutation_confusion",
         "explanation": "Variable x mutated from 5 to 10."
     }
-    
+
     with patch('app.routers.llm.llm_router.diagnose_misconception', new_callable=AsyncMock) as mock_diagnose:
         mock_diagnose.return_value = mock_diagnosis
-        
+
         result = await diagnose_checkpoint_error(req, authorization=None)
-        
+
         assert result["tag"] == "state_mutation_confusion"
         assert result["explanation"] == "Variable x mutated from 5 to 10."
+        # T1-C: with no concept_tag, the selector falls back to direct.
         mock_diagnose.assert_called_once_with(
             code="x = 5\nx = 10",
             checkpoint_type="variable_prediction",
@@ -33,6 +34,7 @@ async def test_diagnose_checkpoint_error_unauthenticated():
             correct_value="10",
             user_prediction="5",
             lineno=2,
+            checkpoint_mode="direct",
         )
 
 @pytest.mark.asyncio
@@ -75,5 +77,8 @@ async def test_diagnose_checkpoint_error_authenticated():
         assert result["tag"] == "state_mutation_confusion"
         assert result["explanation"] == "Variable x mutated."
         
-        # Verify that client.post was called to insert both trace and review card
-        assert mock_client.post.call_count == 2
+        # Verify that client.post was called to insert:
+        #   1. trace (if no trace_id was provided)
+        #   2. review card for the misconception
+        #   3. llm_call_metrics row tagged with the chosen checkpoint_mode (T1-C)
+        assert mock_client.post.call_count == 3

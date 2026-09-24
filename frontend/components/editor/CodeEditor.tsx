@@ -1,4 +1,10 @@
 'use client';
+/**
+ * Purpose: The Monaco-based code editor used in the tracer page.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { editor as MonacoEditorTypes } from 'monaco-editor';

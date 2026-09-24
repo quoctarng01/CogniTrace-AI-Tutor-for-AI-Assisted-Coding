@@ -1,5 +1,6 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Request
-from datetime import datetime, timezone
 
 router = APIRouter()
 
@@ -9,14 +10,15 @@ async def track_event(request: Request):
     Saves an anonymous event to Supabase anonymous_events table.
     No auth required — anonymous by design.
     """
-    from app.config import settings
     import httpx
-    
+
+    from app.config import settings
+
     body = await request.json()
     anon_id = body.get("anon_id", "")
     event_type = body.get("event_type", "")
     metadata = body.get("metadata", {})
-    occurred_at = body.get("occurred_at", datetime.now(timezone.utc).isoformat())
+    occurred_at = body.get("occurred_at", datetime.now(UTC).isoformat())
     async with httpx.AsyncClient(timeout=5.0) as client:
         await client.post(
             f"{settings.supabase_url}/rest/v1/anonymous_events",

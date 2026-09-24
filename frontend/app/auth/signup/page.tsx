@@ -1,5 +1,11 @@
 // frontend/app/auth/signup/page.tsx
 'use client';
+/**
+ * Purpose: New-account registration form.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';

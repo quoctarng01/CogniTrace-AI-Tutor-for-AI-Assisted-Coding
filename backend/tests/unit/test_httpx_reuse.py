@@ -1,4 +1,9 @@
-"""Unit tests for httpx client reuse — FIX-CR-02."""
+"""Unit tests for httpx client reuse — FIX-CR-02.
+
+After Workstream 6 refactor, cache logic moved to `app.services.llm_cache`.
+These tests now verify the shared ExplanationCache client reuses `_http` from
+the LLMRouter.
+"""
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -7,20 +12,22 @@ from unittest.mock import AsyncMock, MagicMock
 async def test_llm_router_reuses_http_client():
     """Verify LLMRouter uses self._http for cache operations, not creating new clients."""
     from app.services.llm_router import LLMRouter
-    
+
     router = LLMRouter()
-    
+
     # Mock self._http
     mock_http = MagicMock()
     mock_http.post = AsyncMock()
     mock_http.post.return_value.status_code = 200
     mock_http.post.return_value.json.return_value = []
     router._http = mock_http
-    
-    # Call _get_cached twice
-    await router._get_cached("test_key")
-    await router._get_cached("test_key2")
-    
+    # Propagate the mock http through to the ExplanationCache too
+    router._cache._http = mock_http
+
+    # Call the cache wrapper twice (the public surface the router exposes)
+    await router._cache.get("test_key")
+    await router._cache.get("test_key2")
+
     # CRITICAL: Should be 2 post calls (reusing self._http)
     # If using new httpx.AsyncClient() per call, this would fail
     assert mock_http.post.call_count == 2, (
@@ -31,25 +38,26 @@ async def test_llm_router_reuses_http_client():
 
 @pytest.mark.asyncio
 async def test_store_cached_uses_self_http():
-    """Verify _store_cached uses self._http, not creating new clients."""
+    """Verify ExplanationCache.store uses self._http, not creating new clients."""
     from app.services.llm_router import LLMRouter
-    
+
     router = LLMRouter()
-    
+
     # Mock self._http
     mock_http = MagicMock()
     mock_http.post = AsyncMock()
     mock_http.post.return_value.status_code = 201
     router._http = mock_http
-    
-    # Call _store_cached
-    await router._store_cached(
+    router._cache._http = mock_http
+
+    # Call the cache wrapper
+    await router._cache.store(
         cache_key="test_key",
         text="test explanation",
         provider_used="github_models",
         model_name="gpt-4o-mini",
     )
-    
+
     # Verify self._http.post was called
     assert mock_http.post.call_count == 1
     # Verify Prefer header is return=representation (FIX-CR-04)

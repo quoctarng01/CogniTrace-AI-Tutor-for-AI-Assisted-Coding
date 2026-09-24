@@ -36,7 +36,7 @@ async def run_with_concurrency_limit(coro_or_callable):
     """
     import asyncio
     import inspect
-    
+
     sem = _get_semaphore()
     async with sem:
         logger.debug("concurrency_slot_acquired", extra={"limit": TRACE_LIMIT})
@@ -56,18 +56,18 @@ class ConcurrencyLimiter:
         async with limiter:
             result = await some_async_operation()
     """
-    
+
     def __init__(self, limit: int | None = None):
         self.limit = limit or TRACE_LIMIT
         self.sem = asyncio.Semaphore(self.limit)
         self._active = 0
-    
+
     async def __aenter__(self):
         await self.sem.acquire()
         self._active += 1
         logger.debug("concurrency_slot_acquired", extra={"active": self._active, "limit": self.limit})
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         self._active -= 1
         self.sem.release()

@@ -10,13 +10,13 @@ Key design decisions:
 """
 from __future__ import annotations
 
-import os
-import sys
 import json
-import uuid
-import subprocess
-import tempfile
 import logging
+import os
+import subprocess
+import sys
+import tempfile
+import uuid
 
 try:
     import resource  # Unix-only; skipped on Windows
@@ -48,13 +48,13 @@ def run_trace(code: str) -> dict:
     """
     trace_id = str(uuid.uuid4())
     temp_file = None
-    
+
     try:
         # Write code to a temp file (prevents shell injection)
         fd, temp_file = tempfile.mkstemp(suffix=".py", prefix=f"codescope_{trace_id}_")
         with os.fdopen(fd, "w") as f:
             f.write(code)
-        
+
         # Build the tracing script
         # The script imports the tracer library and runs it on the temp file
         script = f"""
@@ -111,16 +111,16 @@ except Exception as e:
         "duration_ms": 0,
     }}) + "__CODESCOPE_END__")
 """
-        
+
         # Spawn subprocess
         python_exe = _get_python_executable()
-        
+
         proc = subprocess.Popen(
             [python_exe, "-c", script],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        
+
         try:
             stdout_bytes, stderr_bytes = proc.communicate(timeout=TIMEOUT_SECONDS + 1)
         except subprocess.TimeoutExpired:
@@ -135,10 +135,10 @@ except Exception as e:
                 "total_steps": 0,
                 "duration_ms": TIMEOUT_SECONDS * 1000,
             }
-        
+
         stdout = stdout_bytes.decode("utf-8", errors="replace")
         stderr = stderr_bytes.decode("utf-8", errors="replace")
-        
+
         # Parse result from output
         if "__CODESCOPE_RESULT__" in stdout:
             try:
@@ -156,11 +156,11 @@ except Exception as e:
                     "total_steps": 0,
                     "duration_ms": 0,
                 }
-        
+
         # No result found — check stderr
         if stderr:
             logger.error("trace_stderr", extra={"trace_id": trace_id, "stderr": stderr[:500]})
-        
+
         if proc.returncode != 0:
             return {
                 "error": "RUNTIME_ERROR",
@@ -170,7 +170,7 @@ except Exception as e:
                 "total_steps": 0,
                 "duration_ms": 0,
             }
-        
+
         # Empty output
         return {
             "error": "EMPTY_OUTPUT",
@@ -180,7 +180,7 @@ except Exception as e:
             "total_steps": 0,
             "duration_ms": 0,
         }
-        
+
     finally:
         # Clean up temp file
         if temp_file and os.path.exists(temp_file):

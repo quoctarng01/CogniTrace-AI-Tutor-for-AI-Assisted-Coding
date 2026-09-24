@@ -1,5 +1,11 @@
 // frontend/app/supabase-provider.tsx
 'use client';
+/**
+ * Purpose: Client-side Supabase context. Every page reads `useSupabase()` to get the auth client.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';

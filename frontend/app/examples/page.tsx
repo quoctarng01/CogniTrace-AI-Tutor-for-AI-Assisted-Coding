@@ -1,5 +1,11 @@
 // File: frontend/app/examples/page.tsx
 'use client';
+/**
+ * Purpose: Browse pre-built trace examples.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';

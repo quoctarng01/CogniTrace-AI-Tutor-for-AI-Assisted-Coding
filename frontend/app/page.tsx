@@ -1,3 +1,9 @@
+/**
+ * Purpose: Landing page — the first thing unauthenticated visitors see.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 import Link from 'next/link';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import styles from './page.module.css';

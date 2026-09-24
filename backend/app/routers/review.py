@@ -5,22 +5,119 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, date, timedelta, timezone
-from typing import Optional
+from datetime import UTC, date, datetime, timedelta, timezone
 
 import httpx
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
 from app.config import settings
+from app.dependencies import get_http_client, get_profile_id_for_user
 from app.routers.auth import get_current_user
-from app.dependencies import get_profile_id_for_user, get_http_client
-from fastapi import APIRouter, HTTPException, Header, Depends, Request
-from typing import Optional, Annotated
 
 logger = logging.getLogger("codescope.review")
 
 router = APIRouter()
+
+
+# Curated palette for the mastery-trajectory visualization.
+# Index = slot; assigned in stable order so each concept_tag gets a
+# deterministic colour across renders and across users (as long as the
+# user has < len(PALETTE) concepts).
+_TRAJECTORY_PALETTE: list[str] = [
+    "#7c3aed",  # violet
+    "#0891b2",  # cyan
+    "#db2777",  # pink
+    "#16a34a",  # green
+    "#ea580c",  # orange
+    "#2563eb",  # blue
+    "#ca8a04",  # amber
+    "#dc2626",  # red
+]
+
+
+def _color_for_concept(slot: int) -> str:
+    return _TRAJECTORY_PALETTE[slot % len(_TRAJECTORY_PALETTE)]
+
+
+def _compute_trajectory(
+    events: list[dict],
+    days: int,
+) -> dict:
+    """Aggregate a flat list of review_events into the trajectory shape
+    the frontend expects.
+
+    Input events come ordered newest-first from Supabase; we sort
+    ascending inside this function so the resulting points are
+    chronological.
+    """
+    from collections import defaultdict
+
+    if not events:
+        return {
+            "concepts": [],
+            "date_range": {"start": None, "end": None},
+            "total_events": 0,
+        }
+
+    sorted_events = sorted(events, key=lambda e: e["occurred_at"])
+
+    # Group by concept_tag, preserving first-seen order so the colour
+    # palette is deterministic across renders.
+    by_concept: dict[str, list[dict]] = defaultdict(list)
+    first_seen: dict[str, int] = {}
+    for ev in sorted_events:
+        tag = ev["concept_tag"]
+        if tag not in first_seen:
+            first_seen[tag] = len(first_seen)
+        by_concept[tag].append(ev)
+
+    concepts: list[dict] = []
+    # Recency window for the "recent_miss" pulse: events in the last
+    # 3 calendar days relative to *today* (the most recent event in
+    # the window is always ≤ today). Window-relative would be wrong
+    # because a 30-day window's "last 3 days" depends on the user's
+    # earliest activity, not on recency.
+    today = datetime.now(timezone.utc).date()
+    pulse_cutoff = (today - timedelta(days=3)).isoformat()
+
+    for tag, ev_list in by_concept.items():
+        slot = first_seen[tag]
+        points = [
+            {
+                "date": ev["occurred_at"][:10],  # YYYY-MM-DD
+                "mastery": float(ev["mastery_after"]),
+                "rating": ev["rating"],
+                "repetitions": int(ev["new_repetitions"]),
+                "interval_days": int(ev["new_interval_days"]),
+            }
+            for ev in ev_list
+        ]
+        # Window-aware recent-miss: any hard/again in the last 3 days
+        # of the trajectory window. This is what the SVG pulses on.
+        recent_miss = any(
+            p["date"] >= pulse_cutoff and p["rating"] in ("again", "hard")
+            for p in points
+        )
+        concepts.append(
+            {
+                "concept_tag": tag,
+                "color": _color_for_concept(slot),
+                "total_reviews": len(points),
+                "current_mastery": points[-1]["mastery"],
+                "recent_miss": recent_miss,
+                "points": points,
+            }
+        )
+
+    return {
+        "concepts": concepts,
+        "date_range": {
+            "start": sorted_events[0]["occurred_at"][:10],
+            "end": sorted_events[-1]["occurred_at"][:10],
+        },
+        "total_events": len(sorted_events),
+    }
 
 
 async def _calculate_streak(user_id: str, supabase_url: str, supabase_key: str, client: httpx.AsyncClient | None = None) -> int:
@@ -57,30 +154,30 @@ async def _calculate_streak(user_id: str, supabase_url: str, supabase_key: str, 
                     "apikey": supabase_key,
                 },
             )
-    
+
     if resp.status_code != 200:
         return 0
-    
+
     cards = resp.json()
-    
+
     # Group reviewed dates
     reviewed_dates: set[str] = set()
     for card in cards:
         ts = card.get("last_reviewed_at")
         if ts:
             reviewed_dates.add(ts[:10])  # YYYY-MM-DD
-    
+
     # Count consecutive days from today backwards (or yesterday if today is not yet reviewed)
     streak = 0
     check_date = date.today()
-    
+
     if check_date.isoformat() not in reviewed_dates:
         yesterday = check_date - timedelta(days=1)
         if yesterday.isoformat() in reviewed_dates:
             check_date = yesterday
         else:
             return 0
-    
+
     while True:
         date_str = check_date.isoformat()
         if date_str in reviewed_dates:
@@ -88,7 +185,7 @@ async def _calculate_streak(user_id: str, supabase_url: str, supabase_key: str, 
             check_date -= timedelta(days=1)
         else:
             break
-    
+
     return streak
 
 # ── SM-2 Algorithm ────────────────────────────────────────────────
@@ -125,7 +222,7 @@ def sm2_calculate(
     # EF' = EF + (0.1 - (5-q) * (0.08 + (5-q) * 0.02))
     new_ef = easiness_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
     new_ef = max(MIN_EF, new_ef)  # Minimum EF is 1.3
-    
+
     # Calculate new interval
     if quality < 2:
         # Failed completely ("again") — reset to 1 day
@@ -143,13 +240,13 @@ def sm2_calculate(
         else:
             new_interval = round(interval_days * new_ef)
         new_repetitions = repetitions + 1
-    
+
     next_review = date.today()
     # For quality >= 2, we schedule it in the future
     if quality >= 2:
         from datetime import timedelta
         next_review = date.today() + timedelta(days=new_interval)
-    
+
     return new_ef, new_interval, new_repetitions, next_review
 
 # ── Request/Response Models ───────────────────────────────────────
@@ -170,8 +267,8 @@ class ReviewCardResponse(BaseModel):
     easiness_factor: float
     repetitions: int
     due: bool = False
-    trace: Optional[dict] = None
-    code_repair_challenge: Optional[str] = None
+    trace: dict | None = None
+    code_repair_challenge: str | None = None
 
 class DueReviewsResponse(BaseModel):
     cards: list[ReviewCardResponse]
@@ -225,6 +322,109 @@ async def get_due_reviews(
 
     streak = await _calculate_streak(profile_id, settings.supabase_url, settings.supabase_service_key)
     return DueReviewsResponse(cards=cards[:20], streak=streak, total_due=len(cards))
+
+
+class TrajectoryPoint(BaseModel):
+    date: str
+    mastery: float
+    rating: str
+    repetitions: int
+    interval_days: int
+
+
+class TrajectoryConcept(BaseModel):
+    concept_tag: str
+    color: str
+    total_reviews: int
+    current_mastery: float
+    recent_miss: bool
+    points: list[TrajectoryPoint]
+
+
+class TrajectoryResponse(BaseModel):
+    concepts: list[TrajectoryConcept]
+    date_range: dict
+    total_events: int
+    days: int
+
+
+# NOTE: /trajectory is registered BEFORE /{card_id} on purpose — FastAPI
+# matches routes in registration order and the `/{card_id}` catch-all would
+# otherwise swallow `/trajectory` (treat it as card_id="trajectory") and
+# return "Card not found". Keep this above the catch-all.
+@router.get("/trajectory", response_model=TrajectoryResponse)
+async def get_mastery_trajectory(
+    request: Request,
+    days: int = 30,
+    authorization: str | None = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """Per-concept mastery trajectory for the last N days.
+
+    Backed by the V015 ``review_events`` append-only log. Used by the
+    ``/dashboard/mastery`` page (THESIS-05 §2). One Supabase read;
+    aggregation happens in Python.
+
+    Auth: required (the trajectory is per-user and exposes review
+    history which is sensitive).
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    if days < 1 or days > 365:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "INVALID_DAYS", "message": "days must be in [1, 365]"},
+        )
+
+    user = await get_current_user(request, authorization)
+    profile_id = await get_profile_id_for_user(user.get("id", ""), client)
+
+    if not profile_id:
+        return TrajectoryResponse(
+            concepts=[],
+            date_range={"start": None, "end": None},
+            total_events=0,
+            days=days,
+        )
+
+    # Supabase expects ISO-8601. We compute the cutoff in UTC.
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    cutoff_iso = cutoff.isoformat()
+
+    resp = await client.get(
+        f"{settings.supabase_url}/rest/v1/review_events",
+        params={
+            "user_id": f"eq.{profile_id}",
+            "occurred_at": f"gte.{cutoff_iso}",
+            "select": "concept_tag,rating,new_repetitions,new_interval_days,mastery_after,occurred_at",
+            "order": "occurred_at.desc",
+            "limit": "5000",
+        },
+        headers={
+            "Authorization": f"Bearer {authorization[7:]}",
+            "apikey": settings.supabase_service_key,
+        },
+    )
+    if resp.status_code != 200:
+        # Treat Supabase failure as an empty trajectory — the page will
+        # render the empty state rather than 500-ing.
+        logger.warning("trajectory_fetch_failed", extra={"status": resp.status_code})
+        return TrajectoryResponse(
+            concepts=[],
+            date_range={"start": None, "end": None},
+            total_events=0,
+            days=days,
+        )
+
+    events = resp.json()
+    agg = _compute_trajectory(events, days)
+    return TrajectoryResponse(
+        concepts=agg["concepts"],
+        date_range=agg["date_range"],
+        total_events=agg["total_events"],
+        days=days,
+    )
 
 
 @router.get("/{card_id}")
@@ -294,7 +494,7 @@ async def get_review_card(
         "type_confusion",
         "general_logic_error"
     }
-    
+
     if concept_tag in MISCONCEPTION_TAGS:
         from app.services.llm_router import llm_router
         custom_settings = None
@@ -352,7 +552,7 @@ async def grade_review_card(
     """Grade a user's typed explanation for active recall review."""
     if not authorization:
         raise HTTPException(status_code=401, detail="Authentication required")
-        
+
     user = await get_current_user(request, authorization)
     user_id = user.get("id", "")
     profile_id = await get_profile_id_for_user(user_id, client)
@@ -383,7 +583,7 @@ async def grade_review_card(
 
     code = trace_data.get("code", "")
     steps = trace_data.get("steps", "[]")
-    
+
     if not isinstance(steps, str):
         steps_json = json.dumps(steps)
     else:
@@ -487,9 +687,45 @@ async def submit_review(
             "interval_days": new_interval,
             "repetitions": new_reps,
             "next_review_date": next_date.isoformat(),
-            "last_reviewed_at": datetime.now(timezone.utc).isoformat(),
+            "last_reviewed_at": datetime.now(UTC).isoformat(),
         },
     )
+
+    # Append-only event log for the mastery-trajectory visualization
+    # (docs/THESIS-05-FUTURE-WORK-TIER1.md §2). We use the same HTTP
+    # client so the insert is rolled into the same auth context.
+    # Best-effort: a failure here must not break the review itself.
+    try:
+        mastery_after = new_reps / (new_reps + 3)  # 0..1 monotone proxy
+        await client.post(
+            f"{settings.supabase_url}/rest/v1/review_events",
+            headers={
+                "Authorization": f"Bearer {authorization[7:]}",
+                "apikey": settings.supabase_service_key,
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",
+            },
+            json={
+                "user_id": profile_id,
+                "card_id": card_id,
+                "trace_id": card.get("trace_id"),
+                "concept_tag": card["concept_tag"],
+                "rating": req.rating,
+                "quality": quality,
+                "prev_repetitions": int(card["repetitions"]),
+                "prev_interval_days": int(card["interval_days"]),
+                "prev_easiness_factor": float(card["easiness_factor"]),
+                "new_repetitions": int(new_reps),
+                "new_interval_days": int(new_interval),
+                "new_easiness_factor": round(float(new_ef), 2),
+                "mastery_after": round(float(mastery_after), 4),
+            },
+        )
+    except Exception as exc:  # pragma: no cover — defensive only
+        logger.warning(
+            "review_event_log_failed",
+            extra={"card_id": card_id, "error": str(exc)},
+        )
 
     logger.info(
         "review_submitted",
@@ -503,3 +739,8 @@ async def submit_review(
         "new_repetitions": new_reps,
         "next_review_date": next_date.isoformat(),
     }
+
+
+
+
+

@@ -1,13 +1,12 @@
 from functools import lru_cache
-from typing import Optional
 
 import httpx
+from fastapi import Depends, Request
 
-from app.config import Settings, settings as app_settings
+from app.config import Settings
+from app.config import settings as app_settings
 from app.repositories.supabase import SupabaseRepository
 
-
-from fastapi import Request, Depends
 
 @lru_cache
 def get_settings() -> Settings:
@@ -28,7 +27,7 @@ async def get_supabase_repo(client: httpx.AsyncClient = Depends(get_http_client)
     await repo.close()
 
 
-async def get_profile_id_for_user(user_id: str, client: httpx.AsyncClient | None = None) -> Optional[str]:
+async def get_profile_id_for_user(user_id: str, client: httpx.AsyncClient | None = None) -> str | None:
     """
     Map auth.users.id (UUID from JWT) → profiles.id (row PK in profiles table).
 
@@ -109,7 +108,7 @@ async def is_pro_user(user_id: str | None, client: httpx.AsyncClient | None = No
     return False
 
 
-async def get_github_pat_for_user(user_id: str, client: httpx.AsyncClient | None = None) -> Optional[str]:
+async def get_github_pat_for_user(user_id: str, client: httpx.AsyncClient | None = None) -> str | None:
     """
     Get the custom github_models_pat for the given auth user UUID.
     """
@@ -149,7 +148,7 @@ async def get_github_pat_for_user(user_id: str, client: httpx.AsyncClient | None
     return None
 
 
-async def get_github_pat_for_profile(profile_id: str, client: httpx.AsyncClient | None = None) -> Optional[str]:
+async def get_github_pat_for_profile(profile_id: str, client: httpx.AsyncClient | None = None) -> str | None:
     """
     Get the custom github_models_pat for the given profile ID.
     """
@@ -189,7 +188,7 @@ async def get_github_pat_for_profile(profile_id: str, client: httpx.AsyncClient 
     return None
 
 
-async def get_profile_settings(profile_id: str, client: httpx.AsyncClient | None = None) -> Optional[dict]:
+async def get_profile_settings(profile_id: str, client: httpx.AsyncClient | None = None) -> dict | None:
     """
     Get the custom settings (custom_api_url, custom_api_key, custom_api_model, github_models_pat)
     for a given profile ID.

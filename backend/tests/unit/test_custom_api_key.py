@@ -10,7 +10,7 @@ async def test_llm_router_uses_custom_pat_override():
     router = LLMRouter()
     
     # Force a cache miss
-    with patch.object(router, '_get_cached', new_callable=AsyncMock) as mock_cached:
+    with patch.object(router._cache, 'get', new_callable=AsyncMock) as mock_cached:
         mock_cached.return_value = None
         
         # Mock settings to have a default PAT
@@ -51,7 +51,7 @@ async def test_llm_router_falls_back_to_settings_pat():
     """Verify that stream_explain falls back to default settings PAT if no custom PAT provided."""
     router = LLMRouter()
     
-    with patch.object(router, '_get_cached', new_callable=AsyncMock) as mock_cached:
+    with patch.object(router._cache, 'get', new_callable=AsyncMock) as mock_cached:
         mock_cached.return_value = None
         
         with patch("app.services.llm_router.settings") as mock_settings:

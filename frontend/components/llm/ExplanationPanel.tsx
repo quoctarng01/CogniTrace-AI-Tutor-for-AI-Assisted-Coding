@@ -1,4 +1,10 @@
 'use client';
+/**
+ * Purpose: Streams the LLM explanation token-by-token into the UI.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useState, useCallback, useEffect } from 'react';
 import { useStreamingExplanation } from '@/hooks/useStreamingExplanation';

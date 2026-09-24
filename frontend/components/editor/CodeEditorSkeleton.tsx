@@ -1,3 +1,9 @@
+/**
+ * Purpose: Loading skeleton shown in place of the Monaco editor.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 import styles from './CodeEditorSkeleton.module.css';
 
 export function CodeEditorSkeleton() {

@@ -1,4 +1,10 @@
 'use client';
+/**
+ * Purpose: Accessible modal wrapper used by share / save / what-if dialogs.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { type ReactNode, useEffect } from 'react';
 

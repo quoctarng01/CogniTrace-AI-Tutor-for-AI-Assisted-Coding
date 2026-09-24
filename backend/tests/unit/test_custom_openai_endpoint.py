@@ -9,7 +9,7 @@ async def test_llm_router_uses_custom_openai_stream():
     """Verify that stream_explain routes to CUSTOM_OPENAI when custom_api_key/url are supplied."""
     router = LLMRouter()
     
-    with patch.object(router, '_get_cached', new_callable=AsyncMock) as mock_cached:
+    with patch.object(router._cache, 'get', new_callable=AsyncMock) as mock_cached:
         mock_cached.return_value = None
         
         # Mock settings to disable Ollama Cloud
@@ -55,7 +55,7 @@ async def test_llm_router_falls_back_when_custom_openai_fails():
     """Verify stream_explain falls back to standard providers if custom_openai fails."""
     router = LLMRouter()
     
-    with patch.object(router, '_get_cached', new_callable=AsyncMock) as mock_cached:
+    with patch.object(router._cache, 'get', new_callable=AsyncMock) as mock_cached:
         mock_cached.return_value = None
         
         with patch("app.services.llm_router.settings") as mock_settings:

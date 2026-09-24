@@ -1,0 +1,178 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  font-family: var(--font-sans), sans-serif;
+}
+
+.gridLine {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  opacity: 0.6;
+}
+
+.axisLabel {
+  font-size: 11px;
+  fill: var(--text-muted);
+}
+
+.conceptGroup {
+  /* No-op — kept for potential future per-line interactions */
+}
+
+.line {
+  /* Default — no animation (used when prefers-reduced-motion) */
+  stroke-dasharray: 0;
+}
+
+.lineDraw {
+  /* Line-draw animation: dasharray length set to a value larger
+     than any path could be; offset starts at that length and
+     animates to 0 over 800ms. */
+  stroke-dasharray: 2000;
+  stroke-dashoffset: 2000;
+  animation: line-draw 800ms ease-out forwards;
+}
+
+@keyframes line-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.pulse {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.6);
+  }
+}
+
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legendTag {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.legendMeta {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.missPill {
+  color: var(--accent, #dc2626);
+  font-size: 9px;
+  line-height: 1;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+  padding: 40px 24px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--text-muted);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.empty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.emptyHint {
+  font-size: 12px;
+  max-width: 360px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lineDraw,
+  .pulse {
+    animation: none;
+  }
+  .lineDraw {
+    stroke-dashoffset: 0;
+  }
+}

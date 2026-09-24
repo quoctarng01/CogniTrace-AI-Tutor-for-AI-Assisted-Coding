@@ -1,0 +1,55 @@
+run_id,task_id,condition,score,bug_identified,fix_provided,latency_ms,reasoning,judged_at
+run01_B01_A,B01,A,1,none,yes,2992,The student provided the correct fix but did not explain the bug or why it caused the error.,2026-09-23T14:35:08.785188+00:00
+run01_B01_B,B01,B,2,"range(1, n) excludes n, causing the sum to miss the last term",yes,2875,"The response correctly identifies the off?by?one error, explains that the stop value is excluded, and supplies the proper fix.",2026-09-23T14:35:14.670545+00:00
+run01_B01_C,B01,C,0,none,no,3728,The response only shows a trace of execution and does not explicitly identify the off?by?one bug or propose the corrected code.,2026-09-23T14:35:21.423083+00:00
+run01_B02_A,B02,A,1,none,yes,2708,The student supplied the correct fix but did not identify or explain the bug's cause.,2026-09-23T14:35:27.150713+00:00
+run01_B02_B,B02,B,2,Mutable default argument (list) causing shared list across calls,yes,3086,"The response correctly identifies the mutable default argument bug, explains why it leads to shared state, and provides the proper None?sentinel fix.",2026-09-23T14:35:33.252144+00:00
+run01_B02_C,B02,C,1,none,no,3715,[parse failed],2026-09-23T14:35:39.981989+00:00
+run01_B03_A,B03,A,1,none,no,2572,[parse failed],2026-09-23T14:35:45.557631+00:00
+run01_B03_B,B03,B,0,none,no,3060,[JSON parse failed: ],2026-09-23T14:35:51.642178+00:00
+run01_B03_C,B03,C,0,none,no,3602,[JSON parse failed: ],2026-09-23T14:35:58.256136+00:00
+run01_B04_A,B04,A,1,none,yes,2992,The student supplied a correct fix but did not explain the bug or why the original code failed.,2026-09-23T14:36:08.377517+00:00
+run01_B04_B,B04,B,0,none,no,3169,[JSON parse failed: ],2026-09-23T14:36:22.613757+00:00
+run01_B04_C,B04,C,0,none,no,3546,[JSON parse failed: ],2026-09-23T14:36:39.395702+00:00
+run01_B05_A,B05,A,1,none,yes,2588,The student provided the correct fix but gave no explanation of the bug's cause.,2026-09-23T14:36:48.048541+00:00
+run01_B05_B,B05,B,2,Local assignment `PI = 3` inside `circle_area` shadows the global constant PI,yes,2812,"The student correctly identified the shadowing bug, explained its effect, and supplied the proper fix.",2026-09-23T14:37:02.003019+00:00
+run01_B05_C,B05,C,1,none,no,3765,[parse failed],2026-09-23T14:37:18.985964+00:00
+run01_B06_A,B06,A,0,none,no,2642,[JSON parse failed: ],2026-09-23T14:37:26.089535+00:00
+run01_B06_B,B06,B,1,none,no,3137,[parse failed],2026-09-23T14:37:40.253964+00:00
+run01_B06_C,B06,C,0,none,no,3836,[JSON parse failed: ],2026-09-23T14:37:56.976072+00:00
+run02_B01_A,B01,A,1,none,yes,2276,The student provided the correct fix but did not explain the bug or why it caused the error.,2026-09-23T14:38:06.199587+00:00
+run02_B01_B,B01,B,2,"use of range(1, n) excludes n, leading to missing the last term in the sum",yes,2551,"The response correctly identifies that using range(1, n) omits the final number, explains why this causes the wrong sum, and provides the proper fix with range(1, n+1).",2026-09-23T14:38:17.131254+00:00
+run02_B01_C,B01,C,0,none,no,3214,The response only shows a trace of execution and does not identify the bug or propose a fix.,2026-09-23T14:38:35.790378+00:00
+run02_B02_A,B02,A,1,none,yes,2535,The student supplied the correct fix but did not explain the bug or its cause.,2026-09-23T14:38:41.333557+00:00
+run02_B02_B,B02,B,2,mutable default argument (roster=[]) creates a shared list across calls,yes,3306,"The response correctly identifies the mutable default argument bug, explains its effect, and supplies the proper None?sentinel fix.",2026-09-23T14:38:55.501292+00:00
+run02_B02_C,B02,C,1,Mutable default argument causing shared list across calls,no,3621,"The student correctly identifies and explains the mutable default argument bug, but does not provide the corrected code.",2026-09-23T14:39:12.009005+00:00
+run02_B03_A,B03,A,1,none,yes,2533,Provides the correct fix but does not explain the bug or why the original code failed.,2026-09-23T14:39:17.561506+00:00
+run02_B03_B,B03,B,2,none,no,2942,[parse failed],2026-09-23T14:39:29.252699+00:00
+run02_B03_C,B03,C,1,none,no,3836,[parse failed],2026-09-23T14:39:48.589860+00:00
+run02_B04_A,B04,A,1,none,yes,2986,The student provides the correct fix but does not explain the underlying bug of modifying the list during iteration.,2026-09-23T14:39:54.599912+00:00
+run02_B04_B,B04,B,0,none,no,3315,[JSON parse failed: ],2026-09-23T14:40:11.030471+00:00
+run02_B04_C,B04,C,1,modifying list while iterating over it,no,3535,"The student correctly identifies and explains the bug (modifying the list during iteration), but does not provide a corrected implementation.",2026-09-23T14:40:27.517224+00:00
+run02_B05_A,B05,A,1,none,yes,2574,The student supplied the correct fix but did not explain the bug or why it caused the error.,2026-09-23T14:40:34.606574+00:00
+run02_B05_B,B05,B,2,Local assignment `PI = 3` shadows the global constant `PI = 3.14159` causing incorrect area calculation,yes,2775,"The response correctly identifies the shadowing bug, explains its effect, and provides the proper fix.",2026-09-23T14:40:48.369642+00:00
+run02_B05_C,B05,C,1,Local variable PI inside circle_area shadows the global PI,no,3628,"The student correctly identifies the shadowing bug and explains its effect, but does not supply the corrected code.",2026-09-23T14:41:04.985511+00:00
+run02_B06_A,B06,A,1,"bare except catches all exceptions, including TypeError",partial,3550,"The student correctly identified that the bare except is too broad and fixed it by catching ZeroDivisionError, but did not handle the TypeError case as required.",2026-09-23T14:41:13.071847+00:00
+run02_B06_B,B06,B,2,"Bare except clause catches all exceptions, including TypeError and KeyboardInterrupt, hiding real errors.",yes,2647,"The student correctly identified that the bare except catches all exceptions and replaced it with a specific ZeroDivisionError handler, explaining the issue and providing the proper fix.",2026-09-23T14:41:26.651003+00:00
+run02_B06_C,B06,C,0,none,no,3145,The response does not correctly identify the overly broad except clause nor provide the proper specific exception handling fix.,2026-09-23T14:41:45.385211+00:00
+run03_B01_A,B01,A,1,none,yes,2484,The student provided the correct fix but did not explain the bug or why it caused the error.,2026-09-23T14:41:50.895185+00:00
+run03_B01_B,B01,B,2,"range(1, n) excludes n, causing the sum to miss the last term",yes,2449,"The response correctly identifies the off?by?one error, explains that range excludes the stop value, and supplies the proper fix.",2026-09-23T14:42:01.949013+00:00
+run03_B01_C,B01,C,0,none,no,3902,The response only provides a partial execution trace and does not identify the off?by?one bug or propose a fix.,2026-09-23T14:42:12.801686+00:00
+run03_B02_A,B02,A,1,none,yes,2555,The student supplied the correct fix but did not identify or explain the underlying bug.,2026-09-23T14:42:21.330085+00:00
+run03_B02_B,B02,B,2,mutable default argument (roster=[]) creates a shared list across calls,yes,2917,"The response correctly identifies the mutable default argument bug, explains its effect, and supplies the proper None?sentinel fix.",2026-09-23T14:42:32.721271+00:00
+run03_B02_C,B02,C,1,mutable default argument creates a shared list across calls,no,4163,"The student correctly identifies the mutable default argument bug and explains why it causes shared state, but does not provide the corrected code.",2026-09-23T14:42:45.325532+00:00
+run03_B03_A,B03,A,1,none,no,2778,[parse failed],2026-09-23T14:42:55.078894+00:00
+run03_B03_B,B03,B,2,"The `if name or ""Guest"":` condition is always true due to ""Guest"" being truthy, so the function returns the empty string instead of the default.",yes,2887,"Student correctly identified that the original condition is always true because the string """"Guest"""" is truthy, and provided the proper fix using `return name or """"Guest""""`.",2026-09-23T14:43:06.569377+00:00
+run03_B03_C,B03,C,1,"The condition `if name or ""Guest"":` is always true, causing the function to return the original (possibly empty) name instead of the fallback ""Guest"".",no,3610,"The student correctly identifies and explains the bug, but does not supply the corrected code.",2026-09-23T14:43:21.044222+00:00
+run03_B04_A,B04,A,1,none,yes,2563,The student supplies the correct fix but does not explain the underlying bug.,2026-09-23T14:43:30.580133+00:00
+run03_B04_B,B04,B,2,Removing elements from the list while iterating over it causes the iterator to skip subsequent elements.,yes,2975,"The student correctly identified that removing elements during iteration skips items and explained why, and supplied a proper fix using a list comprehension.",2026-09-23T14:43:44.551027+00:00
+run03_B04_C,B04,C,1,Removing elements from the list while iterating causes the iterator to skip elements,no,3577,The student correctly identifies and explains the bug but does not provide a corrected implementation.,2026-09-23T14:44:03.567423+00:00
+run03_B05_A,B05,A,1,none,yes,2579,The student supplied the correct fix but did not explain the bug or why it caused the error.,2026-09-23T14:44:10.653365+00:00
+run03_B05_B,B05,B,2,local PI variable shadows the global constant,yes,2571,"The response correctly identifies the shadowing bug, explains its effect on the area calculation, and provides the proper fix.",2026-09-23T14:44:21.735537+00:00
+run03_B05_C,B05,C,1,none,no,3851,[parse failed],2026-09-23T14:44:36.568282+00:00
+run03_B06_A,B06,A,0,none,no,4374,[JSON parse failed: ],2026-09-23T14:44:49.361227+00:00
+run03_B06_B,B06,B,2,none,no,3152,[parse failed],2026-09-23T14:44:59.519018+00:00
+run03_B06_C,B06,C,1,bare except catches all exceptions (including TypeError and ZeroDivisionError),no,3636,"The student correctly identifies that the bare except catches all exceptions and explains the resulting behavior, but does not supply the corrected code.",2026-09-23T14:45:18.744767+00:00

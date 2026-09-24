@@ -125,6 +125,11 @@ describe('TutorChallenge', () => {
       line_number: 3,
       trace_id: 'test-trace-id',
       steps: mockSteps,
+      // T1-C: Adaptive Checkpoint Difficulty — TutorChallenge sends these
+      // along with the diagnose call so the backend can pick an
+      // appropriate mode. `null` when no concept tag was supplied.
+      concept_tag: null,
+      override_mode: false,
     });
 
     // Wait for diagnostics to load

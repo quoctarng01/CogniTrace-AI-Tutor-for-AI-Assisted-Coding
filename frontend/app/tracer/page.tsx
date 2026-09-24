@@ -1,15 +1,22 @@
 'use client';
+/**
+ * Purpose: The main trace editor — code input, run, explanation streaming, share modal.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { api, saveTrace, shareTrace, runTrace as runTraceApi } from '@/lib/api';
-import { getSupabase, getAuthToken } from '@/lib/supabase';
+import { runTrace as runTraceApi } from '@/lib/api';
 import { trackEvent } from '@/lib/analytics';
-import type { TraceResult, TraceStep } from '@/types/trace';
-import type { Annotation } from '@/types/annotation';
 import { useTrace } from '@/hooks/useTrace';
 import { useAuth } from '@/hooks/useAuth';
+import { useShareTrace } from '@/hooks/useShareTrace';
+import { useSaveTrace } from '@/hooks/useSaveTrace';
+import { useCodeAnalysis } from '@/hooks/useCodeAnalysis';
+import { useTraceRunner } from '@/hooks/useTraceRunner';
 import { VariablePanel } from '@/components/tracer/VariablePanel';
 import { AnimationControls } from '@/components/tracer/AnimationControls';
 import { ExplanationPanel } from '@/components/llm/ExplanationPanel';
@@ -17,6 +24,9 @@ import { WhatIfModal } from '@/components/tracer/WhatIfModal';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { TraceTreePanel } from '@/components/tracer/TraceTreePanel';
 import { TutorChallenge } from '@/components/tracer/TutorChallenge';
+import { LoadDial } from '@/components/tracer/LoadDial';
+import { useTraceLoad } from '@/hooks/useTraceLoad';
+import { trackLoadEvent } from '@/lib/analytics';
 import {
   EditorErrorBoundary,
   VariablePanelErrorBoundary,
@@ -62,46 +72,47 @@ function extractConceptTags(code: string): string[] {
   return tags.slice(0, 4);
 }
 
+/* T1-A: tiny wrapper that pairs `useTraceLoad` + `LoadDial`. We define
+ * it here (rather than inline) so the JSX above stays readable.
+ */
+function LoadDialWrapper({ traceId }: { traceId: string }) {
+  const { data, loading, error } = useTraceLoad({ traceId });
+  return <LoadDial load={data} loading={loading} error={error} />;
+}
+
 export default function TracerPage() {
   const router = useRouter();
   const [code, setCode] = useState(SAMPLE_CODE);
-  const [traceResult, setTraceResult] = useState<TraceResult | null>(null);
-  const [originalTraceResult, setOriginalTraceResult] = useState<TraceResult | null>(null);
-  const [compareMode, setCompareMode] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const analyzeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Share modal state
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [shareResult, setShareResult] = useState<{
-    share_token: string;
-    share_url: string;
-    expires_at: string | null;
-    has_password: boolean;
-  } | null>(null);
-  const [shareError, setShareError] = useState<string | null>(null);
-  const [isSharing, setIsSharing] = useState(false);
-  const [sharePassword, setSharePassword] = useState('');
-  const [expirationDays, setExpirationDays] = useState<number | null>(null);
+  // Static analysis: debounced re-run of api.analyzeCode on code change.
+  const { annotations, isAnalyzing } = useCodeAnalysis(code);
 
-  // What-If modal state
-  const [showWhatIf, setShowWhatIf] = useState(false);
-  const [whatIfLoading, setWhatIfLoading] = useState(false);
+  // ── Trace execution (replaces ~30 lines of state + handleTrace) ─────
+  // The runner does its own pre-run housekeeping (clears result, fires
+  // analytics). The animation player is reset from the JSX `onClick` so
+  // we don't need to thread `reset` through here.
+  const {
+    result: traceResult,
+    originalResult: originalTraceResult,
+    compareMode,
+    isLoading,
+    error: traceError,
+    run: runTrace,
+    setOriginalResult: setOriginalTraceResult,
+    setCompareMode,
+    setResult: setTraceResult,
+  } = useTraceRunner({
+    extractConceptTags,
+  });
 
-  // Execution tree panel state
-  const [showTreePanel, setShowTreePanel] = useState(true);
-
+  // useTrace hook — owns the animation player. Declared AFTER useTraceRunner
+  // so it can read `traceResult.steps` synchronously below.
   const steps = traceResult?.steps ?? [];
 
-  // useTrace hook manages animation state from parent
   const {
     currentStep,
     playbackState,
@@ -117,8 +128,48 @@ export default function TracerPage() {
     reset,
   } = useTrace({ steps });
 
+  // ── Share modal state + submit (replaces 9 useState calls + 2 handlers)
+  const {
+    isOpen: showShareModal,
+    open: openShareModal,
+    close: closeShareModal,
+    password: sharePassword,
+    setPassword: setSharePassword,
+    expirationDays,
+    setExpirationDays,
+    isSharing,
+    error: shareError,
+    result: shareResult,
+    submit: submitShare,
+  } = useShareTrace();
+
+  // ── Save-state + handler (replaces 3 useState + handleSaveTrace)
+  const {
+    isSaving,
+    saveSuccess,
+    error: saveError,
+    save: handleSaveTrace,
+  } = useSaveTrace({
+    requireLogin: () => router.push('/auth/login'),
+  });
+
+  // ── What-If modal state
+  const [showWhatIf, setShowWhatIf] = useState(false);
+  const [whatIfLoading, setWhatIfLoading] = useState(false);
+
+  // ── Execution tree panel state
+  const [showTreePanel, setShowTreePanel] = useState(true);
+
+  // Wrap runner so the JSX button can `onClick={handleTrace}` and reset the
+  // animation player at the same time. (`runTrace` alone doesn't know about
+  // the player.)
+  const handleTrace = useCallback(async () => {
+    reset();
+    await runTrace(code);
+  }, [reset, runTrace, code]);
+
   const [completedCheckpoints, setCompletedCheckpoints] = useState<Set<number>>(new Set());
-  
+
   const checkpoints = traceResult?.checkpoints ?? [];
   const activeCheckpoint = checkpoints.find(
     (cp) => cp.step_number === currentStep && !completedCheckpoints.has(currentStep)
@@ -158,121 +209,40 @@ export default function TracerPage() {
     };
   }, []);
 
-  // ── Debounced static analysis on code change ─────────────────────
+  // ── T1-A: emit load-bearing pause events ─────────────────────────
+  // When the user dwells on a line (selectedLine is stable for ≥2s)
+  // we emit a `tracer_pause` event. `selectedLine === null` flushes the
+  // pending pause. We only fire on the *latest* settled line so the
+  // server doesn't see one event per re-render.
   useEffect(() => {
-    if (!code.trim()) {
-      setAnnotations([]);
-      return;
-    }
-    if (analyzeDebounceRef.current) clearTimeout(analyzeDebounceRef.current);
-    analyzeDebounceRef.current = setTimeout(async () => {
-      setIsAnalyzing(true);
-      try {
-        const result = await api.analyzeCode(code);
-        setAnnotations(result.annotations);
-      } catch {
-        // Analysis errors are non-critical — silently clear
-        setAnnotations([]);
-      } finally {
-        setIsAnalyzing(false);
-      }
-    }, 600);
-    return () => {
-      if (analyzeDebounceRef.current) clearTimeout(analyzeDebounceRef.current);
-    };
-  }, [code]);
-
-  const handleSaveTrace = useCallback(async () => {
-    if (!traceResult?.steps?.length) return;
-    const { data } = await getSupabase().auth.getSession();
-    if (!data?.session) {
-      router.push('/auth/login');
-      return;
-    }
-    setIsSaving(true);
-    setError(null);
-    setSaveSuccess(false);
-    try {
-      await saveTrace({ code, steps: traceResult.steps, concept_tags: extractConceptTags(code) });
-      setSaveSuccess(true);
-      trackEvent('trace_saved', {
-        concept_tags: extractConceptTags(code),
-        steps_count: traceResult.steps.length,
-      });
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err) {
-      if (err instanceof Error && err.message.includes('UPGRADE_REQUIRED')) {
-        setError('Free plan limit reached. Upgrade to Pro to save more traces.');
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to save');
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  }, [code, traceResult, router]);
-
-  const handleShareClick = useCallback(() => {
-    setShowShareModal(true);
-    setShareResult(null);
-    setShareError(null);
-    setSharePassword('');
-    setExpirationDays(null);
-  }, []);
-
-  const handleShareSubmit = useCallback(async () => {
-    if (!traceResult?.trace_id) return;
-    setIsSharing(true);
-    setShareError(null);
-    try {
-      const result = await shareTrace(traceResult.trace_id, {
-        expiration_days: expirationDays ?? undefined,
-        password: sharePassword || undefined,
-      });
-      setShareResult(result);
-      trackEvent('trace_shared', {
-        expiration_days: expirationDays,
-        has_password: !!sharePassword,
-      });
-    } catch (err) {
-      setShareError(err instanceof Error ? err.message : 'Failed to generate share link');
-    } finally {
-      setIsSharing(false);
-    }
-  }, [traceResult, expirationDays, sharePassword]);
-
-  const handleTrace = useCallback(async () => {
-    if (!code.trim()) return;
-    setIsLoading(true);
-    setError(null);
-    reset(); // Reset to beginning
-    setTraceResult(null);
-
-    try {
-      trackEvent('trace_run_started', {
-        code_length: code.length,
-        concept_tags: extractConceptTags(code),
-      });
-      const result = await api.runTrace(code);
-      setTraceResult(result);
-      setOriginalTraceResult(result);
-      setCompareMode(false);
-      if (result.error) {
-        setError(result.error_message ?? result.error);
-        trackEvent('trace_run_failed', { error: result.error });
-      } else {
-        trackEvent('trace_run_completed', {
-          total_steps: result.total_steps,
-          duration_ms: result.duration_ms,
+    const traceId = traceResult?.trace_id;
+    if (!traceId) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (selectedLine !== null) {
+      timer = setTimeout(() => {
+        trackLoadEvent('tracer_pause', {
+          trace_id: traceId,
+          line: selectedLine,
+          duration_ms: 2000,
         });
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to run trace';
-      setError(msg);
-      trackEvent('trace_run_failed', { error: msg });
-    } finally {
-      setIsLoading(false);
+      }, 2000);
     }
-  }, [code, reset]);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [selectedLine, traceResult?.trace_id]);
+
+  // ── Combine error sources ─────────────────────────────────────────
+  useEffect(() => {
+    if (traceError) {
+      setError(traceError);
+    }
+  }, [traceError]);
+  useEffect(() => {
+    if (saveError) {
+      setError(saveError);
+    }
+  }, [saveError]);
 
   const handleLineClick = useCallback((lineNumber: number) => {
     setSelectedLine(lineNumber);
@@ -329,7 +299,7 @@ export default function TracerPage() {
           )}
           <button
             className={styles.shareBtn}
-            onClick={handleShareClick}
+            onClick={openShareModal}
             disabled={!traceResult}
             title={!traceResult ? 'Run the trace first' : 'Share this trace'}
           >
@@ -337,7 +307,11 @@ export default function TracerPage() {
           </button>
           <button
             className={styles.saveBtn}
-            onClick={handleSaveTrace}
+            onClick={() => {
+              if (traceResult) {
+                void handleSaveTrace(traceResult, code, extractConceptTags(code));
+              }
+            }}
             disabled={!traceResult || isSaving}
             title={!traceResult ? 'Run the trace first' : 'Save this trace'}
           >
@@ -401,6 +375,11 @@ export default function TracerPage() {
                       code={code}
                       steps={steps}
                       traceId={traceResult?.trace_id}
+                      // T1-C: forward the trace's primary concept tag so the
+                      // adaptive selector can pick a difficulty mode. We compute
+                      // the same tag list we save with — `extractConceptTags`
+                      // runs locally, no LLM.
+                      conceptTag={extractConceptTags(code)[0] ?? null}
                       onSuccess={() => setCompletedCheckpoints(prev => {
                         const next = new Set(prev);
                         next.add(currentStep);
@@ -431,6 +410,16 @@ export default function TracerPage() {
                       onClose={() => setShowExplanation(false)}
                     />
                   </ExplanationPanelErrorBoundary>
+                </div>
+              )}
+
+              {/* T1-A: Cognitive Load Dashboard dial.
+                  Hidden until the trace is saved; otherwise there is no
+                  signal to aggregate. */}
+              {traceResult?.trace_id && (
+                <div className={styles.loadPanel}>
+                  <h4 className={styles.compareColHeader}>📊 Cognitive Load</h4>
+                  <LoadDialWrapper traceId={traceResult.trace_id} />
                 </div>
               )}
             </>
@@ -512,7 +501,16 @@ export default function TracerPage() {
             ) : (
               <button
                 className={styles.whatIfBtn}
-                onClick={() => setShowWhatIf(true)}
+                onClick={() => {
+                  // T1-A: emit a load-bearing replay event so the cognitive
+                  // load dashboard counts replays as interaction pressure.
+                  if (traceResult?.trace_id) {
+                    trackLoadEvent('tracer_whatif_replay', {
+                      trace_id: traceResult.trace_id,
+                    });
+                  }
+                  setShowWhatIf(true);
+                }}
                 disabled={!traceResult || (traceResult.steps?.length ?? 0) === 0}
                 title={!traceResult ? 'Run the trace first' : 'Modify initial values and replay'}
               >
@@ -537,7 +535,7 @@ export default function TracerPage() {
 
       {/* Share Modal */}
       {showShareModal && (
-        <div className={styles.modalOverlay} onClick={() => setShowShareModal(false)}>
+        <div className={styles.modalOverlay} onClick={closeShareModal}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h2 className={styles.modalTitle}>Share Trace</h2>
 
@@ -581,13 +579,17 @@ export default function TracerPage() {
                 <div className={styles.modalActions}>
                   <button
                     className={styles.modalCancelBtn}
-                    onClick={() => setShowShareModal(false)}
+                    onClick={closeShareModal}
                   >
                     Cancel
                   </button>
                   <button
                     className={styles.modalConfirmBtn}
-                    onClick={handleShareSubmit}
+                    onClick={() => {
+                      if (traceResult?.trace_id) {
+                        void submitShare(traceResult.trace_id);
+                      }
+                    }}
                     disabled={isSharing}
                   >
                     {isSharing ? 'Generating...' : 'Generate Link'}
@@ -632,7 +634,7 @@ export default function TracerPage() {
                 <div className={styles.modalActions}>
                   <button
                     className={styles.modalCancelBtn}
-                    onClick={() => setShowShareModal(false)}
+                    onClick={closeShareModal}
                   >
                     Done
                   </button>

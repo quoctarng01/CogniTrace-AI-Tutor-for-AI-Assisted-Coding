@@ -38,12 +38,17 @@ def test_make_cache_key_different_line():
 
 @pytest.mark.asyncio
 async def test_cache_hit_streams_word_by_word():
-    """MEDIUM-03: Cache hit should stream tokens word-by-word, not as one blob."""
+    """MEDIUM-03: Cache hit should stream tokens word-by-word, not as one blob.
+
+    After the Workstream 6 refactor the cache lives behind
+    `LLMRouter._cache.get(...)`. The router no longer exposes a private
+    `_get_cached` helper, so we patch the new surface.
+    """
     router = LLMRouter()
-    
-    with patch.object(router, '_get_cached', new_callable=AsyncMock) as mock_cached:
+
+    with patch.object(router._cache, 'get', new_callable=AsyncMock) as mock_cached:
         mock_cached.return_value = "This is a cached explanation."  # 5 words
-        
+
         tokens = []
         async for token, provider in router.stream_explain(
             code="x = 1",
@@ -54,7 +59,7 @@ async def test_cache_hit_streams_word_by_word():
             if token == "__done__":
                 break
             tokens.append(token)
-        
+
         # Should have multiple tokens (one per word), not one blob
         assert len(tokens) > 1, (
             f"MEDIUM-03: Cache hit returned {len(tokens)} token(s) — should be one token per word. "

@@ -1,0 +1,19 @@
+run_id,task_id,condition,score,bug_identified,fix_provided,latency_ms,reasoning,judged_at
+run01_B01_A,B01,A,1,none,yes,3102,The student supplied the correct fix but did not explain the bug or why it caused the error.,2026-09-23T12:32:52.815996+00:00
+run01_B01_B,B01,B,2,"range(1, n) excludes n, causing the sum to miss the last term",yes,2510,"The response correctly identifies the off?by?one error, explains its effect, and supplies the proper fix.",2026-09-23T12:32:58.339751+00:00
+run01_B01_C,B01,C,0,none,no,3604,[JSON parse failed: ],2026-09-23T12:33:04.966221+00:00
+run01_B02_A,B02,A,1,none,yes,2009,The student supplied the correct fix but did not explain the bug or why it occurs.,2026-09-23T12:33:10.000313+00:00
+run01_B02_B,B02,B,2,mutable default argument (shared list across calls),yes,5611,"The response correctly identifies the mutable default argument bug, explains the shared?list behavior, and supplies the proper None?sentinel fix.",2026-09-23T12:33:18.627998+00:00
+run01_B02_C,B02,C,1,Mutable default argument (roster=[]) leads to shared list across calls,no,4397,"The student correctly identifies the mutable default argument bug and explains why it causes shared state, but does not provide the corrected function implementation.",2026-09-23T12:33:26.045223+00:00
+run01_B03_A,B03,A,1,none,no,4743,[parse failed],2026-09-23T12:33:33.808178+00:00
+run01_B03_B,B03,B,2,none,no,3078,[parse failed],2026-09-23T12:33:39.905908+00:00
+run01_B03_C,B03,C,1,"The condition `if name or ""Guest"":` is always true because ""Guest"" is truthy, causing the function to always return `name` even when empty.",partial,3330,"The student correctly identifies and explains the bug, but does not provide a complete corrected implementation.",2026-09-23T12:33:46.254980+00:00
+run01_B04_A,B04,A,2,none,no,2901,[parse failed],2026-09-23T12:33:52.171333+00:00
+run01_B04_B,B04,B,2,Modifying the list during iteration causes index shifts and skips elements,yes,3099,"The response correctly identifies that removing items while iterating shifts indices and causes elements to be skipped, explains the issue, and supplies a proper fix using a list comprehension.",2026-09-23T12:33:58.289650+00:00
+run01_B04_C,B04,C,0,none,no,3935,The response misinterprets the iteration behavior and does not provide a correct fix.,2026-09-23T12:34:13.237800+00:00
+run01_B05_A,B05,A,1,local PI assignment shadows the global PI,yes,2652,The student provided the correct fix but did not explain the bug or why it caused the error.,2026-09-23T12:34:22.839351+00:00
+run01_B05_B,B05,B,2,Local variable PI = 3 inside circle_area shadows the global PI = 3.14159,yes,3179,"The student correctly identified the shadowing bug, explained its effect, and supplied the proper fix.",2026-09-23T12:34:37.316359+00:00
+run01_B05_C,B05,C,2,Local variable PI = 3 in circle_area shadows the global PI = 3.14159,yes,3213,"The response correctly identifies the shadowing bug, explains its effect on the area calculation, and gives the proper fix.",2026-09-23T12:34:52.320619+00:00
+run01_B06_A,B06,A,1,"bare except catches all exceptions, should catch specific ZeroDivisionError",partial,2554,"Student correctly identified that the bare except should be narrowed to ZeroDivisionError and fixed that, but did not explain why the original catch was problematic nor handle the TypeError case.",2026-09-23T12:34:59.353551+00:00
+run01_B06_B,B06,B,1,none,no,3397,[parse failed],2026-09-23T12:35:11.394227+00:00
+run01_B06_C,B06,C,0,none,no,3535,The response mischaracterizes the behavior (claims implicit conversion) and does not correctly identify the bare except issue nor provide the proper fix.,2026-09-23T12:35:30.627986+00:00

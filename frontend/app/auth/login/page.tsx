@@ -1,5 +1,11 @@
 // frontend/app/auth/login/page.tsx
 'use client';
+/**
+ * Purpose: Email/password + OAuth sign-in form.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';

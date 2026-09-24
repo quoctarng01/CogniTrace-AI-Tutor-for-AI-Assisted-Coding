@@ -1,5 +1,11 @@
 // frontend/components/CodeBlock.tsx
 'use client';
+/**
+ * Purpose: Syntax-highlighted code block (no editor).
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useMemo } from 'react';
 

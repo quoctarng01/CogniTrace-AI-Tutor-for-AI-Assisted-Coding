@@ -1,4 +1,10 @@
 'use client';
+/**
+ * Purpose: The single button primitive — variants `primary / secondary / danger / ghost`.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { type ReactNode, type ButtonHTMLAttributes, useState } from 'react';
 

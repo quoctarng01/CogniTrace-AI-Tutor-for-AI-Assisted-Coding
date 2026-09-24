@@ -1,4 +1,10 @@
 'use client';
+/**
+ * Purpose: Side panel showing the live variable state at the current step.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useEffect, useRef, useCallback } from 'react';
 import type { TraceStep } from '@/types/trace';

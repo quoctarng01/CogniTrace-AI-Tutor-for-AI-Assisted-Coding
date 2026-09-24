@@ -1,17 +1,25 @@
 // frontend/app/trace/[share_token]/page.tsx
 'use client';
+/**
+ * Purpose: Read-only viewer for a shared trace, reached via a share token.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { fetchSharedTrace, saveTrace, authFetch } from '@/lib/api';
+import { fetchSharedTrace, saveTrace, authFetch, fetchFingerprint } from '@/lib/api';
 import { getSupabase } from '@/lib/supabase';
 import type { SharedTraceData } from '@/types/user';
 import type { TraceResult } from '@/types/trace';
 import { VariablePanel } from '@/components/tracer/VariablePanel';
 import { AnimationControls } from '@/components/tracer/AnimationControls';
 import { TutorChallenge } from '@/components/tracer/TutorChallenge';
+import { FingerprintBadge } from '@/components/tracer/FingerprintBadge';
+import { useFingerprint } from '@/hooks/useFingerprint';
 import { useTrace } from '@/hooks/useTrace';
 import styles from './share.module.css';
 
@@ -271,6 +279,9 @@ export default function SharedTracePage() {
           <span className={styles.logo}>◈</span>
           <span className={styles.brandName}>CogniTrace</span>
         </Link>
+        {trace && (
+          <ShareFingerprintInline traceId={trace.id} shareToken={trace.share_token} />
+        )}
         <div className={styles.actions}>
           <button
             onClick={handleFork}
@@ -364,6 +375,43 @@ export default function SharedTracePage() {
           )}
         </footer>
       )}
+    </div>
+  );
+}
+
+function ShareFingerprintInline({
+  traceId,
+  shareToken,
+}: {
+  traceId: string;
+  shareToken: string;
+}) {
+  const fp = useFingerprint(traceId);
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        flex: 1,
+        justifyContent: 'center',
+        minWidth: 0,
+      }}
+    >
+      {fp && <FingerprintBadge fingerprint={fp} />}
+      <Link
+        href={`/fingerprint/${shareToken}`}
+        prefetch={false}
+        title="Open standalone fingerprint share page (with OG card)"
+        style={{
+          fontSize: 12,
+          color: 'var(--text-muted, #555)',
+          textDecoration: 'none',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Fingerprint →
+      </Link>
     </div>
   );
 }

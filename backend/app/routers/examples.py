@@ -5,39 +5,17 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
-from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Header, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.config import Settings, settings
+from app.rate_limit_decorator import _rate_limit
 from app.routers.auth import get_current_user, get_profile_id
 
 logger = logging.getLogger("codescope.examples")
 router = APIRouter()
-
-# ── Rate Limiter ────────────────────────────────────────────────
-# Both GET and POST endpoints are rate-limited via slowapi.
-# slowapi must be installed: pip install slowapi
-
-_limiter = None
-try:
-    from slowapi import Limiter
-    from slowapi.util import get_remote_address
-
-    _limiter = Limiter(key_func=get_remote_address)
-except ImportError:
-    pass  # slowapi not installed — rate limiting disabled
-
-
-def _rate_limit(rate: str):
-    """Decorator factory for rate limiting. Returns a no-op decorator if slowapi is unavailable."""
-    def decorator(func):
-        if _limiter is None:
-            return func
-        return _limiter.limit(rate)(func)
-    return decorator
 
 
 # ── Pydantic Models ────────────────────────────────────────────
@@ -70,7 +48,7 @@ class ExampleRecord(BaseModel):
     category: str
     title: str
     code: str
-    why_ai_generates_this: Optional[str] = None
+    why_ai_generates_this: str | None = None
     annotations: list[Annotation] = []
     explanation: str
     common_mistakes: list[str] = []
@@ -87,7 +65,7 @@ class ExampleListResponse(BaseModel):
 class SaveExampleRequest(BaseModel):
     """Optional body for POST /examples/{id}/save. Currently unused but reserved for future notes field."""
     model_config = {"extra": "ignore"}
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class SaveExampleResponse(BaseModel):
@@ -133,7 +111,7 @@ async def _check_existing_card(
     user_id: str,
     profile_id: str,
     example_id: str,
-) -> Optional[str]:
+) -> str | None:
     """
     Check if the user already has a review_card for this example.
     Matches by profile_id (user) + concept_tag matching the example category prefix.
@@ -236,7 +214,7 @@ async def _create_review_card(
 @router.get("/", response_model=ExampleListResponse)
 async def list_examples(
     request: Request,
-    category: Optional[str] = Query(None, description="Filter by category"),
+    category: str | None = Query(None, description="Filter by category"),
     limit: int = Query(20, ge=1, le=50, description="Results per page"),
     offset: int = Query(0, ge=0, description="Skip N results"),
 ):
@@ -350,7 +328,7 @@ async def get_example(request: Request, example_id: str):
 @router.post("/{example_id}/save", response_model=SaveExampleResponse)
 async def save_example_to_queue(
     example_id: str,
-    req: Optional[SaveExampleRequest] = None,
+    req: SaveExampleRequest | None = None,
     authorization: str = Header(None),
     request: Request = None,
 ):

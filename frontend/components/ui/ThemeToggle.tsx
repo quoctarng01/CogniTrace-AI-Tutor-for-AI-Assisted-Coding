@@ -1,4 +1,10 @@
 'use client';
+/**
+ * Purpose: Light / dark theme toggle.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useEffect, useState } from 'react';
 import { Sun, Moon } from 'lucide-react';

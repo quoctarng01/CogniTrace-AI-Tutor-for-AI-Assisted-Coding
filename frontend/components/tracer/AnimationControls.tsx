@@ -1,4 +1,10 @@
 'use client';
+/**
+ * Purpose: Play / pause / step controls for the trace animation.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useCallback, useRef, useEffect } from 'react';
 import type { PlaybackSpeed, PlaybackState } from '@/hooks/useTrace';

@@ -1,4 +1,10 @@
 "use client";
+/**
+ * Purpose: Modal that lets a learner fork a trace at a chosen step.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useState, useCallback } from 'react';
 import type { TraceStep } from '@/types/trace';

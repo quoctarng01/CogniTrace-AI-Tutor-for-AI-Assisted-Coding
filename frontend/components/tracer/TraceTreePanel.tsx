@@ -1,4 +1,10 @@
 'use client';
+/**
+ * Purpose: Tree view of the trace steps.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import React, { useState, useMemo, useEffect } from 'react';
 import type { TraceStep } from '@/types/trace';

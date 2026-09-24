@@ -198,3 +198,97 @@
   cursor: not-allowed;
   box-shadow: none;
 }
+
+/* ── T1-C: Adaptive Checkpoint Difficulty UI ─────────────────────────── */
+
+.modeBadge {
+  display: inline-block;
+  margin-top: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.modeBadge[data-mode='scaffolded'] {
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.1);
+  border-color: rgba(250, 204, 21, 0.35);
+}
+
+.modeBadge[data-mode='contrastive'] {
+  color: #f472b6;
+  background: rgba(244, 114, 182, 0.1);
+  border-color: rgba(244, 114, 182, 0.35);
+}
+
+.hintBar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0.5rem 0 1rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(250, 204, 21, 0.05);
+  border: 1px dashed rgba(250, 204, 21, 0.3);
+  border-radius: 8px;
+}
+
+.hintBtn {
+  background: rgba(250, 204, 21, 0.15);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  color: #facc15;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hintBtn:hover:not(:disabled) {
+  background: rgba(250, 204, 21, 0.25);
+  transform: translateY(-1px);
+}
+
+.hintBtn:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.hintNote {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  line-height: 1.4;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hintCard {
+  margin: 0.5rem 0 1rem;
+  padding: 0.85rem 1rem;
+  background: rgba(59, 130, 246, 0.08);
+  border-left: 3px solid #3b82f6;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.hintLabel {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #3b82f6;
+  margin-bottom: 0.35rem;
+}
+
+.hintText {
+  font-size: 0.95rem;
+  color: #e5e7eb;
+  line-height: 1.5;
+  margin: 0;
+}

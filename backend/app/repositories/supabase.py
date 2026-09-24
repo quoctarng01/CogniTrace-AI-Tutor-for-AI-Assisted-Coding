@@ -8,12 +8,15 @@ Lifecycle:
   - Closed in lifespan shutdown: await repo.close()
 """
 from __future__ import annotations
+
+import datetime
+import time
 from dataclasses import dataclass
 from typing import Any
-import time
-import datetime
+
 import httpx
 import structlog
+
 from app.config import Settings
 from app.routers.auth import get_profile_id
 
@@ -46,6 +49,34 @@ class ReviewResult:
     interval: int
     ease_factor: float
     streak: int
+
+
+@dataclass
+class FingerprintResult:
+    """One row of `trace_fingerprints`.
+
+    The `json` field is the canonical wire payload returned by
+    `Fingerprint.to_dict()`. The other scalar fields are denormalised so
+    the share-page endpoint can query them directly without unpacking
+    JSONB.
+    """
+
+    id: str
+    trace_id: str
+    user_id: str | None
+    json: dict
+    compact: str
+    short_form: str
+    signature: str
+    branches: int
+    recursion_depth: int
+    loop_iterations: int
+    total_steps: int
+    conceptual_complexity: str
+    total_duration_ms: float
+    exception_types: list[str]
+    created_at: str
+    updated_at: str
 
 # ── Repository ─────────────────────────────────────────────────────────────
 class SupabaseRepository:
@@ -249,3 +280,101 @@ class SupabaseRepository:
             ttl=60,
         )
         return [ReviewResult(**r) for r in rows]
+
+    # ── Trace Fingerprints (Workstream 12) ─────────────────────────────
+    async def upsert_fingerprint(
+        self,
+        *,
+        trace_id: str,
+        user_id: str | None,
+        payload: dict,
+    ) -> FingerprintResult | None:
+        """Insert or update the fingerprint row for a trace.
+
+        `payload` is the wire dict returned by `Fingerprint.to_dict()`
+        PLUS the denormalised scalar fields we store alongside the JSON
+        blob. We POST with `Prefer: resolution=merge-duplicates` so the
+        unique constraint on `trace_id` produces an UPSERT — the same
+        call works for first-save and for re-save without branching.
+        """
+        body = {
+            "trace_id": trace_id,
+            "user_id": user_id,
+            "fingerprint_json": payload,
+            "compact": payload["compact"],
+            "short_form": payload["short"],
+            "signature": payload["signature"],
+            "branches": payload["branches"],
+            "recursion_depth": payload["recursion_depth"],
+            "loop_iterations": payload["loop_iterations"],
+            "total_steps": payload["total_steps"],
+            "conceptual_complexity": payload["conceptual_complexity"],
+            "total_duration_ms": payload["total_duration_ms"],
+            "exception_types": payload["exception_types"],
+        }
+        try:
+            resp = await self._client.post(
+                f"{self.base_url}/rest/v1/trace_fingerprints",
+                json=body,
+                headers={
+                    **self._headers(),
+                    "Prefer": "resolution=merge-duplicates,return=representation",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, list) and data:
+                data = data[0]
+            # Postgres returns `fingerprint_json` not `json`; remap.
+            data["json"] = data.pop("fingerprint_json", {})
+            return FingerprintResult(**data)
+        except Exception as e:
+            logger.error("supabase_upsert_fingerprint_failed", trace_id=trace_id, error=str(e))
+            return None
+
+    async def get_fingerprint_by_trace_id(self, trace_id: str) -> FingerprintResult | None:
+        """Fetch the fingerprint for a trace id. Returns None if no row exists."""
+        rows = await self._get(
+            "/rest/v1/trace_fingerprints",
+            params={"trace_id": f"eq.{trace_id}", "select": "*", "limit": "1"},
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        row["json"] = row.pop("fingerprint_json", {})
+        return FingerprintResult(**row)
+
+    async def get_fingerprint_by_share_token(
+        self, share_token: str, owner_id: str | None = None
+    ) -> FingerprintResult | None:
+        """Fetch the fingerprint via the trace's share token. The join lives
+        in application code (PostgREST doesn't do cross-table SELECTs without
+        an explicit `!inner()` resource embedding) so we look up the trace
+        first, then the fingerprint.
+
+        Anonymous callers (no `owner_id`) can only resolve fingerprints for
+        traces that are publicly shared.
+        """
+        if owner_id:
+            trace_rows = await self._get(
+                "/rest/v1/traces",
+                params={
+                    "share_token": f"eq.{share_token}",
+                    "or": f"(is_public.eq.true,user_id.eq.{owner_id})",
+                    "select": "id",
+                    "limit": "1",
+                },
+            )
+        else:
+            trace_rows = await self._get(
+                "/rest/v1/traces",
+                params={
+                    "share_token": f"eq.{share_token}",
+                    "is_public": "eq.true",
+                    "select": "id",
+                    "limit": "1",
+                },
+            )
+        if not trace_rows:
+            return None
+        return await self.get_fingerprint_by_trace_id(trace_rows[0]["id"])

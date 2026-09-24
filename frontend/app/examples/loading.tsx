@@ -1,3 +1,9 @@
+/**
+ * Purpose: Skeleton shown while the examples index is fetching.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 // File: frontend/app/examples/loading.tsx
 export default function Loading() {
   return (

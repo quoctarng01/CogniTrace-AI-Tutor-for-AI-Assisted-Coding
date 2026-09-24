@@ -1,5 +1,11 @@
 // File: frontend/app/examples/[id]/page.tsx
 'use client';
+/**
+ * Purpose: Detail view for one example trace.
+ * Collaborators: —
+ * Last significant change: Workstream 9
+ */
+
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';

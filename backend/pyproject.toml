@@ -13,6 +13,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "slowapi>=0.1.0",
     "bcrypt>=4.0.1",
+    "psycopg2-binary>=2.9.0",  # for scripts/seed_review_events.py and ad-hoc DB inspection
 ]
 
 [project.optional-dependencies]
@@ -23,8 +24,36 @@ dev = [
     "ruff>=0.8.0",
     "mypy>=1.14.0",
     "httpx>=0.28.0",
+    "pytest-mock>=3.14.0",
 ]
 
 [tool.setuptools.packages.find]
 include = ["app*", "tracer*", "analyzers*"]
 exclude = ["tests*", "migrations*"]
+
+# ── Ruff (replaces Black + isort + flake8) ─────────────────────────
+# Workstream 9: this is the single formatter + linter for the backend.
+# Run `ruff format backend/` and `ruff check --fix backend/` before pushing.
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations", "tests"]
+
+[tool.ruff.lint]
+# E/W: pycodestyle errors & warnings
+# F: pyflakes (unused imports, undefined names)
+# I: isort (import ordering)
+# UP: pyupgrade (modern syntax — UP006 enforces `dict[...]` over `Dict[...]`)
+# B: bugbear (common pitfalls)
+# SIM: simplify (SIM108 → use ternary, SIM117 → combine with-statements)
+select = ["E", "W", "F", "I", "UP", "B", "SIM"]
+ignore = [
+    "E501",  # line length is enforced by the formatter, not the linter
+    "B008",  # function-call-in-default-argument is intentional for Pydantic Field()
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["B011"]  # asserts in tests are fine
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tracer", "analyzers"]
