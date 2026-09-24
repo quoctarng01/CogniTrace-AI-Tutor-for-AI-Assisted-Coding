@@ -6,10 +6,25 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 FROM python:3.12-slim
 WORKDIR /app
 COPY --from=builder /install /usr/local
+
+# Copy only what we need to run the API. Avoid `COPY . .` because it
+# pulls in tests/, .coverage, .pytest_cache, etc. which bloat the image.
 COPY ./app ./app
+COPY ./tracer ./tracer
+COPY ./analyzers ./analyzers
+COPY ./scripts ./scripts
+
+# Run as a non-privileged user — defence in depth in case the sandbox
+# in app.services.tracer_runner ever fails closed.
 RUN useradd --create-home appuser && chown -R appuser:appuser /app
 USER appuser
+
+# Railway injects $PORT. Local docker compose uses 8000. Honour $PORT
+# so the image runs the same on Railway, locally, and in CI.
+ENV PORT=8000
 EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)" || exit 1
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:'+__import__('os').environ.get('PORT','8000')+'/health', timeout=3)" || exit 1
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
